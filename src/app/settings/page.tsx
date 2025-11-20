@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MapPin, Save, Loader2 } from "lucide-react";
+import { MapPin, Save, Loader2, AlertCircle } from "lucide-react";
 import { getSettings, saveSettings } from "@/lib/storage";
 import { getCurrentLocation } from "@/lib/geolocation";
 import { AppSettings } from "@/types/attendance";
@@ -16,6 +16,7 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   useEffect(() => {
     const currentSettings = getSettings();
@@ -24,9 +25,14 @@ export default function SettingsPage() {
 
   const handleUseCurrentLocation = async () => {
     setIsGettingLocation(true);
+    setLocationError(null);
+    
     try {
+      console.log('Requesting location...');
       const position = await getCurrentLocation();
       const { latitude, longitude } = position.coords;
+      
+      console.log('Location obtained:', { latitude, longitude, accuracy: position.coords.accuracy });
       
       setSettings((prev) => ({
         ...prev!,
@@ -37,10 +43,12 @@ export default function SettingsPage() {
         },
       }));
       
-      toast.success("Current location captured!");
+      toast.success(`Location captured! (Accuracy: ${Math.round(position.coords.accuracy)}m)`);
     } catch (error) {
-      toast.error("Failed to get location. Please enable location services.");
-      console.error(error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to get location. Please enable location services.";
+      console.error('Location error:', error);
+      setLocationError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsGettingLocation(false);
     }
@@ -77,6 +85,31 @@ export default function SettingsPage() {
           <h1 className="text-2xl font-bold">Settings</h1>
           <p className="text-muted-foreground">Configure your office location</p>
         </div>
+
+        {/* Location Error Alert */}
+        {locationError && (
+          <Card className="bg-destructive/10 border-destructive/30">
+            <CardContent className="pt-6">
+              <div className="flex gap-3">
+                <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <div className="space-y-2 text-sm">
+                  <p className="font-semibold text-destructive">Location Error</p>
+                  <p className="text-foreground">{locationError}</p>
+                  <div className="text-muted-foreground space-y-1 text-xs">
+                    <p><strong>Troubleshooting:</strong></p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>Check browser address bar for location permission prompt</li>
+                      <li>Enable location services in your device settings</li>
+                      <li>Try opening browser settings and allowing location access</li>
+                      <li>If using iOS/Safari: Settings → Privacy → Location Services → Safari</li>
+                      <li>If using Chrome: Site settings → Permissions → Location</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Office Location Card */}
         <Card>
