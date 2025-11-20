@@ -13,7 +13,7 @@ function isValidEmail(email: string): boolean {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, email, department, photo_url } = body;
+    const { name, email, department, photo_url, salary, hourly_rate } = body;
 
     // Validate required fields
     if (!name || typeof name !== 'string' || name.trim() === '') {
@@ -78,6 +78,36 @@ export async function POST(request: NextRequest) {
 
     if (photo_url && typeof photo_url === 'string' && photo_url.trim() !== '') {
       insertData.photoUrl = photo_url.trim();
+    }
+
+    // Add salary if provided
+    if (salary !== undefined && salary !== null) {
+      const parsedSalary = parseFloat(salary);
+      if (isNaN(parsedSalary) || parsedSalary < 0) {
+        return NextResponse.json(
+          { 
+            error: 'Salary must be a valid positive number',
+            code: 'INVALID_SALARY' 
+          },
+          { status: 400 }
+        );
+      }
+      insertData.salary = parsedSalary;
+    }
+
+    // Add hourly_rate if provided
+    if (hourly_rate !== undefined && hourly_rate !== null) {
+      const parsedHourlyRate = parseFloat(hourly_rate);
+      if (isNaN(parsedHourlyRate) || parsedHourlyRate < 0) {
+        return NextResponse.json(
+          { 
+            error: 'Hourly rate must be a valid positive number',
+            code: 'INVALID_HOURLY_RATE' 
+          },
+          { status: 400 }
+        );
+      }
+      insertData.hourlyRate = parsedHourlyRate;
     }
 
     // Insert new employee
