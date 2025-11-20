@@ -136,6 +136,166 @@ export const taxCalculations = sqliteTable('tax_calculations', {
   calculatedAt: text('calculated_at').notNull(),
 });
 
+// CRM: Leads table
+export const leads = sqliteTable('leads', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  phone: text('phone'),
+  source: text('source'),
+  stage: text('stage').notNull(),
+  value: integer('value'),
+  assignedTo: integer('assigned_to').references(() => user.id),
+  priority: text('priority'),
+  notes: text('notes'),
+  nextFollowUp: text('next_follow_up'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+  wonAt: text('won_at'),
+  lostReason: text('lost_reason'),
+});
+
+// CRM: Clients table
+export const clients = sqliteTable('clients', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  phone: text('phone'),
+  address: text('address'),
+  industry: text('industry'),
+  companySize: text('company_size'),
+  annualRevenue: integer('annual_revenue'),
+  website: text('website'),
+  assignedAccountManager: integer('assigned_account_manager').references(() => user.id),
+  status: text('status').notNull(),
+  leadId: integer('lead_id').references(() => leads.id),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+// CRM: Communications table
+export const communications = sqliteTable('communications', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  clientId: integer('client_id').references(() => clients.id),
+  leadId: integer('lead_id').references(() => leads.id),
+  type: text('type').notNull(),
+  subject: text('subject'),
+  notes: text('notes').notNull(),
+  userId: integer('user_id').references(() => user.id),
+  communicationDate: text('communication_date').notNull(),
+  createdAt: text('created_at').notNull(),
+});
+
+// CRM: Contracts table
+export const contracts = sqliteTable('contracts', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  clientId: integer('client_id').notNull().references(() => clients.id),
+  contractNumber: text('contract_number').notNull().unique(),
+  title: text('title').notNull(),
+  description: text('description'),
+  value: integer('value').notNull(),
+  startDate: text('start_date').notNull(),
+  endDate: text('end_date').notNull(),
+  status: text('status').notNull(),
+  documentUrl: text('document_url'),
+  signedBy: text('signed_by'),
+  signedAt: text('signed_at'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+// CRM: Projects table
+export const projects = sqliteTable('projects', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  description: text('description'),
+  clientId: integer('client_id').notNull().references(() => clients.id),
+  contractId: integer('contract_id').references(() => contracts.id),
+  status: text('status').notNull(),
+  startDate: text('start_date'),
+  endDate: text('end_date'),
+  budget: integer('budget'),
+  spent: integer('spent').notNull(),
+  projectManager: integer('project_manager').references(() => user.id),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+// CRM: SLAs table
+export const slas = sqliteTable('slas', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  clientId: integer('client_id').notNull().references(() => clients.id),
+  contractId: integer('contract_id').references(() => contracts.id),
+  metricName: text('metric_name').notNull(),
+  targetValue: text('target_value').notNull(),
+  currentValue: text('current_value'),
+  status: text('status').notNull(),
+  measurementPeriod: text('measurement_period'),
+  lastMeasuredAt: text('last_measured_at'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+// CRM: Quotations table
+export const quotations = sqliteTable('quotations', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  quotationNumber: text('quotation_number').notNull().unique(),
+  clientId: integer('client_id').references(() => clients.id),
+  leadId: integer('lead_id').references(() => leads.id),
+  title: text('title').notNull(),
+  description: text('description'),
+  subtotal: integer('subtotal').notNull(),
+  taxRate: real('tax_rate').notNull(),
+  taxAmount: integer('tax_amount').notNull(),
+  totalAmount: integer('total_amount').notNull(),
+  validUntil: text('valid_until').notNull(),
+  status: text('status').notNull(),
+  notes: text('notes'),
+  termsConditions: text('terms_conditions'),
+  createdBy: integer('created_by').references(() => user.id),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+  acceptedAt: text('accepted_at'),
+  rejectedReason: text('rejected_reason'),
+});
+
+// CRM: Quotation Items table
+export const quotationItems = sqliteTable('quotation_items', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  quotationId: integer('quotation_id').notNull().references(() => quotations.id),
+  description: text('description').notNull(),
+  quantity: integer('quantity').notNull(),
+  unitPrice: integer('unit_price').notNull(),
+  total: integer('total').notNull(),
+  createdAt: text('created_at').notNull(),
+});
+
+// CRM: Proposals table
+export const proposals = sqliteTable('proposals', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  proposalNumber: text('proposal_number').notNull().unique(),
+  clientId: integer('client_id').references(() => clients.id),
+  leadId: integer('lead_id').references(() => leads.id),
+  title: text('title').notNull(),
+  description: text('description'),
+  objective: text('objective'),
+  scopeOfWork: text('scope_of_work'),
+  deliverables: text('deliverables'),
+  timeline: text('timeline'),
+  pricing: integer('pricing'),
+  status: text('status').notNull(),
+  templateId: text('template_id'),
+  pdfUrl: text('pdf_url'),
+  createdBy: integer('created_by').references(() => user.id),
+  sentAt: text('sent_at'),
+  reviewedAt: text('reviewed_at'),
+  acceptedAt: text('accepted_at'),
+  rejectedAt: text('rejected_at'),
+  rejectionReason: text('rejection_reason'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
 // Auth tables for better-auth
 export const user = sqliteTable("user", {
   id: text("id").primaryKey(),
