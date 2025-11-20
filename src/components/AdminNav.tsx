@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Users, DollarSign, ClipboardEdit, Settings, LayoutDashboard, LogOut, Home } from "lucide-react";
+import { Users, DollarSign, LayoutDashboard, LogOut, Home } from "lucide-react";
 import { authClient, useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 
@@ -27,8 +27,6 @@ export default function AdminNav() {
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
     { href: "/admin/employees", label: "Employees", icon: Users },
     { href: "/admin/payroll", label: "Payroll", icon: DollarSign },
-    { href: "/admin/manual-attendance", label: "Manual Entry", icon: ClipboardEdit },
-    { href: "/admin/settings", label: "Settings", icon: Settings },
   ];
 
   return (
@@ -59,7 +57,7 @@ export default function AdminNav() {
           </div>
         </div>
         
-        <div className="flex gap-1 overflow-x-auto">
+        <div className="flex gap-1 overflow-x-auto pb-2">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href;
