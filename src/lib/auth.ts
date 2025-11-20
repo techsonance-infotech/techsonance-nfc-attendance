@@ -12,6 +12,16 @@ export const auth = betterAuth({
 	emailAndPassword: {    
 		enabled: true
 	},
+	user: {
+		additionalFields: {
+			role: {
+				type: "string",
+				required: false,
+				defaultValue: "employee",
+				input: true, // Allow this field to be set during registration
+			}
+		}
+	},
 	plugins: [bearer()]
 });
 
