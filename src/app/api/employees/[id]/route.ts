@@ -42,7 +42,7 @@ export async function PATCH(
 
     // Parse request body
     const body = await request.json();
-    const { name, email, department, photo_url, nfc_card_id } = body;
+    const { name, email, department, photo_url, nfc_card_id, salary, hourly_rate } = body;
 
     // Build update object with only provided fields
     const updates: {
@@ -51,6 +51,8 @@ export async function PATCH(
       department?: string;
       photoUrl?: string;
       nfcCardId?: string;
+      salary?: number;
+      hourlyRate?: number;
     } = {};
 
     // Validate and sanitize name
@@ -136,6 +138,44 @@ export async function PATCH(
       }
 
       updates.nfcCardId = trimmedNfcCardId;
+    }
+
+    // Validate salary
+    if (salary !== undefined) {
+      if (salary !== null) {
+        const parsedSalary = parseFloat(salary);
+        if (isNaN(parsedSalary) || parsedSalary < 0) {
+          return NextResponse.json(
+            {
+              error: 'Salary must be a valid positive number',
+              code: 'INVALID_SALARY',
+            },
+            { status: 400 }
+          );
+        }
+        updates.salary = parsedSalary;
+      } else {
+        updates.salary = null;
+      }
+    }
+
+    // Validate hourly_rate
+    if (hourly_rate !== undefined) {
+      if (hourly_rate !== null) {
+        const parsedHourlyRate = parseFloat(hourly_rate);
+        if (isNaN(parsedHourlyRate) || parsedHourlyRate < 0) {
+          return NextResponse.json(
+            {
+              error: 'Hourly rate must be a valid positive number',
+              code: 'INVALID_HOURLY_RATE',
+            },
+            { status: 400 }
+          );
+        }
+        updates.hourlyRate = parsedHourlyRate;
+      } else {
+        updates.hourlyRate = null;
+      }
     }
 
     // Check if there are any fields to update
