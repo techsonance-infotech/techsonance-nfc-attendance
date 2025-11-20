@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
+import AdminNav from "@/components/AdminNav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -138,8 +139,11 @@ export default function ManualAttendancePage() {
 
   if (isPending || isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="min-h-screen bg-background">
+        <AdminNav />
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
       </div>
     );
   }
@@ -149,159 +153,163 @@ export default function ManualAttendancePage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Manual Attendance Entry</h1>
-        <p className="text-muted-foreground">
-          Add attendance records manually when NFC or automatic tracking is not available
-        </p>
-      </div>
+    <div className="min-h-screen bg-background">
+      <AdminNav />
+      
+      <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold">Manual Attendance Entry</h1>
+          <p className="text-muted-foreground">
+            Add attendance records manually when NFC or automatic tracking is not available
+          </p>
+        </div>
 
-      {/* Info Card */}
-      <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
-        <CardContent className="pt-6">
-          <div className="flex gap-3">
-            <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="font-semibold text-blue-900 dark:text-blue-100">
-                When to use manual entry:
-              </p>
-              <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-disc list-inside">
-                <li>NFC reader is not working or unavailable</li>
-                <li>Employee forgot to check in/out</li>
-                <li>System downtime or technical issues</li>
-                <li>Retroactive attendance corrections</li>
-              </ul>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Manual Entry Form */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Add Attendance Record
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Employee Selection */}
-            <div className="space-y-2">
-              <Label htmlFor="employee">Employee *</Label>
-              <Select
-                value={formData.employeeId}
-                onValueChange={(value) => setFormData({ ...formData, employeeId: value })}
-              >
-                <SelectTrigger id="employee">
-                  <SelectValue placeholder="Select an employee" />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.id.toString()}>
-                      {employee.name} - {employee.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Date */}
-            <div className="space-y-2">
-              <Label htmlFor="date">Date *</Label>
-              <Input
-                id="date"
-                type="date"
-                value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                max={new Date().toISOString().split("T")[0]}
-                required
-              />
-            </div>
-
-            {/* Time In */}
-            <div className="space-y-2">
-              <Label htmlFor="timeIn">Time In *</Label>
-              <Input
-                id="timeIn"
-                type="time"
-                value={formData.timeIn}
-                onChange={(e) => setFormData({ ...formData, timeIn: e.target.value })}
-                required
-              />
-            </div>
-
-            {/* Time Out */}
-            <div className="space-y-2">
-              <Label htmlFor="timeOut">Time Out (Optional)</Label>
-              <Input
-                id="timeOut"
-                type="time"
-                value={formData.timeOut}
-                onChange={(e) => setFormData({ ...formData, timeOut: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">
-                Leave empty if employee hasn't checked out yet
-              </p>
-            </div>
-
-            {/* Status */}
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(value) => setFormData({ ...formData, status: value })}
-              >
-                <SelectTrigger id="status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="present">Present</SelectItem>
-                  <SelectItem value="leave">Leave</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Submit Button */}
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Adding Attendance...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Add Attendance Record
-                </>
-              )}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      {/* Duration Preview */}
-      {formData.timeIn && formData.timeOut && (
-        <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
+        {/* Info Card */}
+        <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-green-900 dark:text-green-100">
-                Duration Preview:
-              </span>
-              <span className="text-lg font-bold text-green-700 dark:text-green-300">
-                {(() => {
-                  const duration = calculateDuration(formData.timeIn, formData.timeOut);
-                  const hours = Math.floor(duration / 60);
-                  const minutes = duration % 60;
-                  return `${hours}h ${minutes}m`;
-                })()}
-              </span>
+            <div className="flex gap-3">
+              <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold text-blue-900 dark:text-blue-100">
+                  When to use manual entry:
+                </p>
+                <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-disc list-inside">
+                  <li>NFC reader is not working or unavailable</li>
+                  <li>Employee forgot to check in/out</li>
+                  <li>System downtime or technical issues</li>
+                  <li>Retroactive attendance corrections</li>
+                </ul>
+              </div>
             </div>
           </CardContent>
         </Card>
-      )}
+
+        {/* Manual Entry Form */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Add Attendance Record
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Employee Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="employee">Employee *</Label>
+                <Select
+                  value={formData.employeeId}
+                  onValueChange={(value) => setFormData({ ...formData, employeeId: value })}
+                >
+                  <SelectTrigger id="employee">
+                    <SelectValue placeholder="Select an employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map((employee) => (
+                      <SelectItem key={employee.id} value={employee.id.toString()}>
+                        {employee.name} - {employee.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Date */}
+              <div className="space-y-2">
+                <Label htmlFor="date">Date *</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  max={new Date().toISOString().split("T")[0]}
+                  required
+                />
+              </div>
+
+              {/* Time In */}
+              <div className="space-y-2">
+                <Label htmlFor="timeIn">Time In *</Label>
+                <Input
+                  id="timeIn"
+                  type="time"
+                  value={formData.timeIn}
+                  onChange={(e) => setFormData({ ...formData, timeIn: e.target.value })}
+                  required
+                />
+              </div>
+
+              {/* Time Out */}
+              <div className="space-y-2">
+                <Label htmlFor="timeOut">Time Out (Optional)</Label>
+                <Input
+                  id="timeOut"
+                  type="time"
+                  value={formData.timeOut}
+                  onChange={(e) => setFormData({ ...formData, timeOut: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty if employee hasn't checked out yet
+                </p>
+              </div>
+
+              {/* Status */}
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value) => setFormData({ ...formData, status: value })}
+                >
+                  <SelectTrigger id="status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="present">Present</SelectItem>
+                    <SelectItem value="leave">Leave</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Submit Button */}
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Adding Attendance...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Add Attendance Record
+                  </>
+                )}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Duration Preview */}
+        {formData.timeIn && formData.timeOut && (
+          <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-green-900 dark:text-green-100">
+                  Duration Preview:
+                </span>
+                <span className="text-lg font-bold text-green-700 dark:text-green-300">
+                  {(() => {
+                    const duration = calculateDuration(formData.timeIn, formData.timeOut);
+                    const hours = Math.floor(duration / 60);
+                    const minutes = duration % 60;
+                    return `${hours}h ${minutes}m`;
+                  })()}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
