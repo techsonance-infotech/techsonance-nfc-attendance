@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Users, DollarSign, LayoutDashboard, LogOut, Home, ClipboardEdit, Receipt, TrendingUp, Wallet, BarChart3 } from "lucide-react";
+import { Users, DollarSign, LayoutDashboard, LogOut, Home, ClipboardEdit, Receipt, TrendingUp, Wallet, BarChart3, UserCircle, Building2, FileText } from "lucide-react";
 import { authClient, useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import {
@@ -43,7 +43,14 @@ export default function AdminNav() {
     { href: "/admin/finance/reports", label: "Reports", icon: BarChart3 },
   ];
 
+  const crmMenuItems = [
+    { href: "/admin/crm/leads", label: "Lead Management", icon: UserCircle },
+    { href: "/admin/crm/clients", label: "Client Management", icon: Building2 },
+    { href: "/admin/crm/quotations", label: "Quotations & Proposals", icon: FileText },
+  ];
+
   const isFinanceActive = pathname?.startsWith("/admin/finance");
+  const isCrmActive = pathname?.startsWith("/admin/crm");
 
   return (
     <div className="border-b bg-card">
@@ -105,6 +112,36 @@ export default function AdminNav() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               {financeMenuItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href;
+                
+                return (
+                  <DropdownMenuItem
+                    key={item.href}
+                    onClick={() => router.push(item.href)}
+                    className={isActive ? "bg-accent" : ""}
+                  >
+                    <Icon className="h-4 w-4 mr-2" />
+                    {item.label}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant={isCrmActive ? "default" : "ghost"}
+                size="sm"
+                className="whitespace-nowrap"
+              >
+                <Building2 className="h-4 w-4 mr-2" />
+                CRM & Sales
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {crmMenuItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = pathname === item.href;
                 
