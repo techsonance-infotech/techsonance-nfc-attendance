@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Users, DollarSign, LayoutDashboard, LogOut, Home } from "lucide-react";
+import { Users, DollarSign, LayoutDashboard, LogOut, Home, ClipboardEdit } from "lucide-react";
 import { authClient, useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 
@@ -27,6 +27,7 @@ export default function AdminNav() {
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
     { href: "/admin/employees", label: "Employees", icon: Users },
     { href: "/admin/payroll", label: "Payroll", icon: DollarSign },
+    { href: "/admin/manual-attendance", label: "Manual Entry", icon: ClipboardEdit },
   ];
 
   return (
