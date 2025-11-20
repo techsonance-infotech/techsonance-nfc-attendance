@@ -29,6 +29,13 @@
       "when": 1763649904869,
       "tag": "0003_wooden_skrulls",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1763651000613,
+      "tag": "0004_modern_scarecrow",
+      "breakpoints": true
     }
   ]
 }
