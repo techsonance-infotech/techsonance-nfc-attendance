@@ -8,6 +8,8 @@ export const employees = sqliteTable('employees', {
   nfcCardId: text('nfc_card_id').unique(),
   department: text('department'),
   photoUrl: text('photo_url'),
+  salary: real('salary'),
+  hourlyRate: real('hourly_rate'),
   createdAt: text('created_at').notNull(),
 });
 
@@ -36,6 +38,7 @@ export const user = sqliteTable("user", {
     .$defaultFn(() => false)
     .notNull(),
   image: text("image"),
+  role: text("role").notNull().default('employee'),
   createdAt: integer("created_at", { mode: "timestamp" })
     .$defaultFn(() => new Date())
     .notNull(),
