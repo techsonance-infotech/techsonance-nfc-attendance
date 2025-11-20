@@ -1,0 +1,211 @@
+import { db } from '@/db';
+import { salaryComponents } from '@/db/schema';
+
+async function main() {
+    const sampleSalaryComponents = [
+        // Employee 1 - 4 components (2 allowances, 2 deductions)
+        {
+            employeeId: 1,
+            componentName: 'HRA',
+            componentType: 'allowance',
+            amount: 0,
+            isPercentage: true,
+            percentageValue: 40,
+            isActive: true,
+            createdAt: new Date('2024-01-01').toISOString(),
+            updatedAt: new Date('2024-01-01').toISOString(),
+        },
+        {
+            employeeId: 1,
+            componentName: 'Transport Allowance',
+            componentType: 'allowance',
+            amount: 2000,
+            isPercentage: false,
+            percentageValue: null,
+            isActive: true,
+            createdAt: new Date('2024-01-01').toISOString(),
+            updatedAt: new Date('2024-01-01').toISOString(),
+        },
+        {
+            employeeId: 1,
+            componentName: 'Professional Tax',
+            componentType: 'deduction',
+            amount: 200,
+            isPercentage: false,
+            percentageValue: null,
+            isActive: true,
+            createdAt: new Date('2024-01-01').toISOString(),
+            updatedAt: new Date('2024-01-01').toISOString(),
+        },
+        {
+            employeeId: 1,
+            componentName: 'Insurance Premium',
+            componentType: 'deduction',
+            amount: 500,
+            isPercentage: false,
+            percentageValue: null,
+            isActive: true,
+            createdAt: new Date('2024-01-01').toISOString(),
+            updatedAt: new Date('2024-01-01').toISOString(),
+        },
+        
+        // Employee 2 - 3 components (2 allowances, 1 deduction)
+        {
+            employeeId: 2,
+            componentName: 'HRA',
+            componentType: 'allowance',
+            amount: 0,
+            isPercentage: true,
+            percentageValue: 40,
+            isActive: true,
+            createdAt: new Date('2024-01-02').toISOString(),
+            updatedAt: new Date('2024-01-02').toISOString(),
+        },
+        {
+            employeeId: 2,
+            componentName: 'Medical Allowance',
+            componentType: 'allowance',
+            amount: 1500,
+            isPercentage: false,
+            percentageValue: null,
+            isActive: true,
+            createdAt: new Date('2024-01-02').toISOString(),
+            updatedAt: new Date('2024-01-02').toISOString(),
+        },
+        {
+            employeeId: 2,
+            componentName: 'Professional Tax',
+            componentType: 'deduction',
+            amount: 200,
+            isPercentage: false,
+            percentageValue: null,
+            isActive: true,
+            createdAt: new Date('2024-01-02').toISOString(),
+            updatedAt: new Date('2024-01-02').toISOString(),
+        },
+        
+        // Employee 3 - 3 components (3 allowances, 0 deductions)
+        {
+            employeeId: 3,
+            componentName: 'HRA',
+            componentType: 'allowance',
+            amount: 0,
+            isPercentage: true,
+            percentageValue: 40,
+            isActive: true,
+            createdAt: new Date('2024-01-03').toISOString(),
+            updatedAt: new Date('2024-01-03').toISOString(),
+        },
+        {
+            employeeId: 3,
+            componentName: 'Special Allowance',
+            componentType: 'allowance',
+            amount: 0,
+            isPercentage: true,
+            percentageValue: 20,
+            isActive: true,
+            createdAt: new Date('2024-01-03').toISOString(),
+            updatedAt: new Date('2024-01-03').toISOString(),
+        },
+        {
+            employeeId: 3,
+            componentName: 'Transport Allowance',
+            componentType: 'allowance',
+            amount: 2000,
+            isPercentage: false,
+            percentageValue: null,
+            isActive: true,
+            createdAt: new Date('2024-01-03').toISOString(),
+            updatedAt: new Date('2024-01-03').toISOString(),
+        },
+        
+        // Employee 4 - 4 components (3 allowances, 1 deduction)
+        {
+            employeeId: 4,
+            componentName: 'HRA',
+            componentType: 'allowance',
+            amount: 0,
+            isPercentage: true,
+            percentageValue: 40,
+            isActive: true,
+            createdAt: new Date('2024-01-04').toISOString(),
+            updatedAt: new Date('2024-01-04').toISOString(),
+        },
+        {
+            employeeId: 4,
+            componentName: 'Transport Allowance',
+            componentType: 'allowance',
+            amount: 2000,
+            isPercentage: false,
+            percentageValue: null,
+            isActive: true,
+            createdAt: new Date('2024-01-04').toISOString(),
+            updatedAt: new Date('2024-01-04').toISOString(),
+        },
+        {
+            employeeId: 4,
+            componentName: 'Medical Allowance',
+            componentType: 'allowance',
+            amount: 1500,
+            isPercentage: false,
+            percentageValue: null,
+            isActive: true,
+            createdAt: new Date('2024-01-04').toISOString(),
+            updatedAt: new Date('2024-01-04').toISOString(),
+        },
+        {
+            employeeId: 4,
+            componentName: 'Insurance Premium',
+            componentType: 'deduction',
+            amount: 500,
+            isPercentage: false,
+            percentageValue: null,
+            isActive: true,
+            createdAt: new Date('2024-01-04').toISOString(),
+            updatedAt: new Date('2024-01-04').toISOString(),
+        },
+        
+        // Employee 5 - 3 components (2 allowances, 1 deduction)
+        {
+            employeeId: 5,
+            componentName: 'HRA',
+            componentType: 'allowance',
+            amount: 0,
+            isPercentage: true,
+            percentageValue: 40,
+            isActive: true,
+            createdAt: new Date('2024-01-05').toISOString(),
+            updatedAt: new Date('2024-01-05').toISOString(),
+        },
+        {
+            employeeId: 5,
+            componentName: 'Special Allowance',
+            componentType: 'allowance',
+            amount: 0,
+            isPercentage: true,
+            percentageValue: 20,
+            isActive: true,
+            createdAt: new Date('2024-01-05').toISOString(),
+            updatedAt: new Date('2024-01-05').toISOString(),
+        },
+        {
+            employeeId: 5,
+            componentName: 'Professional Tax',
+            componentType: 'deduction',
+            amount: 200,
+            isPercentage: false,
+            percentageValue: null,
+            isActive: true,
+            createdAt: new Date('2024-01-05').toISOString(),
+            updatedAt: new Date('2024-01-05').toISOString(),
+        },
+    ];
+
+    await db.insert(salaryComponents).values(sampleSalaryComponents);
+    
+    console.log('✅ Salary components seeder completed successfully');
+}
+
+main().catch((error) => {
+    console.error('❌ Seeder failed:', error);
+});
