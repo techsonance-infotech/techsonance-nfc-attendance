@@ -39,7 +39,6 @@ export default function AdminNav() {
   const financeMenuItems = [
     { href: "/admin/finance/invoices", label: "Invoices & Payments", icon: Receipt },
     { href: "/admin/finance/expenses", label: "Expenses", icon: Wallet },
-    { href: "/admin/finance/payroll", label: "Payroll System", icon: TrendingUp },
     { href: "/admin/finance/reports", label: "Reports", icon: BarChart3 },
   ];
 
