@@ -57,8 +57,7 @@ export default function RegisterPage() {
         email: formData.email,
         name: formData.name,
         password: formData.password,
-        // @ts-ignore - role is added in the schema
-        role: formData.role,
+        role: formData.role, // Now properly handled by better-auth
       });
 
       if (error?.code) {
