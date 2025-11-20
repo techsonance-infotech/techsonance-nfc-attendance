@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Clock, Settings, Users } from "lucide-react";
+import { Home, Clock, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -10,7 +10,6 @@ export default function BottomNav() {
 
   const navItems = [
     { href: "/", icon: Home, label: "Home" },
-    { href: "/employees", icon: Users, label: "Employees" },
     { href: "/history", icon: Clock, label: "History" },
     { href: "/settings", icon: Settings, label: "Settings" },
   ];
