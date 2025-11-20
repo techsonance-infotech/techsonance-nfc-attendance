@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { invoices } from '@/db/schema';
 import { eq, like, desc, and } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
 
 // Helper function to generate invoice number
 function generateInvoiceNumber(): string {
@@ -26,11 +25,6 @@ function isValidStatus(status: string): boolean {
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
     const searchParams = request.nextUrl.searchParams;
     const id = searchParams.get('id');
 
@@ -45,10 +39,7 @@ export async function GET(request: NextRequest) {
 
       const invoice = await db.select()
         .from(invoices)
-        .where(and(
-          eq(invoices.id, parseInt(id)),
-          eq(invoices.createdBy, user.id)
-        ))
+        .where(eq(invoices.id, parseInt(id)))
         .limit(1);
 
       if (invoice.length === 0) {
@@ -68,7 +59,7 @@ export async function GET(request: NextRequest) {
     const clientName = searchParams.get('client_name');
 
     let query = db.select().from(invoices);
-    const conditions = [eq(invoices.createdBy, user.id)];
+    const conditions = [];
 
     // Add status filter
     if (status) {
@@ -86,13 +77,14 @@ export async function GET(request: NextRequest) {
       conditions.push(like(invoices.clientName, `%${clientName}%`));
     }
 
-    query = query
-      .where(and(...conditions))
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+
+    const results = await query
       .orderBy(desc(invoices.createdAt))
       .limit(limit)
       .offset(offset);
-
-    const results = await query;
 
     return NextResponse.json(results, { status: 200 });
 
@@ -106,20 +98,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
     const body = await request.json();
-
-    // Security check: reject if createdBy provided in body
-    if ('createdBy' in body || 'created_by' in body) {
-      return NextResponse.json({ 
-        error: "User ID cannot be provided in request body",
-        code: "USER_ID_NOT_ALLOWED" 
-      }, { status: 400 });
-    }
 
     const {
       clientName,
@@ -132,7 +111,8 @@ export async function POST(request: NextRequest) {
       taxRate,
       taxAmount,
       totalAmount,
-      notes
+      notes,
+      createdBy
     } = body;
 
     // Validate required fields
@@ -213,6 +193,13 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    if (!createdBy) {
+      return NextResponse.json({ 
+        error: "createdBy is required",
+        code: "MISSING_CREATED_BY" 
+      }, { status: 400 });
+    }
+
     // Validate numeric fields are positive
     if (subtotal < 0) {
       return NextResponse.json({ 
@@ -261,7 +248,7 @@ export async function POST(request: NextRequest) {
         taxAmount,
         totalAmount,
         notes: notes?.trim() || null,
-        createdBy: user.id,
+        createdBy,
         createdAt: timestamp,
         updatedAt: timestamp,
       })
