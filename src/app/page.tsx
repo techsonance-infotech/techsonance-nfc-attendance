@@ -1,16 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { MapPin, Clock, LogOut, Loader2, CheckCircle, XCircle, CreditCard, User } from "lucide-react";
+import { MapPin, Clock, LogOut, Loader2, CheckCircle, XCircle, CreditCard, User, Shield, LogIn as LogInIcon } from "lucide-react";
 import { getCurrentLocation, isWithinOfficeLocation } from "@/lib/geolocation";
 import { getSettings } from "@/lib/storage";
 import { toast } from "sonner";
 import BottomNav from "@/components/BottomNav";
 import { isNFCSupported, startNFCReader, stopNFCReader, formatNFCSerial } from "@/lib/nfc";
+import { authClient, useSession } from "@/lib/auth-client";
 
 interface Employee {
   id: number;
@@ -32,6 +34,8 @@ interface AttendanceRecord {
 }
 
 export default function Home() {
+  const router = useRouter();
+  const { data: session, isPending: sessionLoading, refetch: refetchSession } = useSession();
   const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
   const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
   const [isChecking, setIsChecking] = useState(false);
@@ -62,6 +66,19 @@ export default function Home() {
       });
     } catch (error) {
       console.error("Error marking missing timeouts:", error);
+    }
+  };
+
+  const handleSignOut = async () => {
+    const { error } = await authClient.signOut();
+    if (error?.code) {
+      toast.error("Failed to sign out");
+    } else {
+      localStorage.removeItem("bearer_token");
+      refetchSession();
+      toast.success("Signed out successfully");
+      setCurrentEmployee(null);
+      setTodayRecord(null);
     }
   };
 
@@ -292,9 +309,55 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background pb-20">
       <div className="max-w-lg mx-auto p-4 space-y-4">
-        {/* Header */}
+        {/* Header with Auth Info */}
         <div className="pt-4 pb-2">
-          <h1 className="text-2xl font-bold">NFC Attendance Tracker</h1>
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-2xl font-bold">NFC Attendance Tracker</h1>
+            {!sessionLoading && (
+              <div className="flex gap-2">
+                {session?.user ? (
+                  <>
+                    {(session.user as any).role === "admin" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => router.push("/admin")}
+                      >
+                        <Shield className="mr-2 h-4 w-4" />
+                        Admin
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleSignOut}
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Sign Out
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={() => router.push("/login")}
+                  >
+                    <LogInIcon className="mr-2 h-4 w-4" />
+                    Admin Login
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+          
+          {session?.user && (
+            <div className="flex items-center gap-2 mb-2">
+              <Badge variant="secondary">
+                {(session.user as any).role === "admin" ? "Administrator" : "Employee"}
+              </Badge>
+              <span className="text-sm text-muted-foreground">{session.user.email}</span>
+            </div>
+          )}
+          
           <p className="text-muted-foreground">
             {currentTime.toLocaleDateString('en-US', { 
               weekday: 'long', 
