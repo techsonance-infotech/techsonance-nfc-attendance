@@ -2,9 +2,15 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Users, DollarSign, LayoutDashboard, LogOut, Home, ClipboardEdit } from "lucide-react";
+import { Users, DollarSign, LayoutDashboard, LogOut, Home, ClipboardEdit, Receipt, TrendingUp, Wallet, BarChart3 } from "lucide-react";
 import { authClient, useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function AdminNav() {
   const pathname = usePathname();
@@ -29,6 +35,15 @@ export default function AdminNav() {
     { href: "/admin/payroll", label: "Payroll", icon: DollarSign },
     { href: "/admin/manual-attendance", label: "Manual Entry", icon: ClipboardEdit },
   ];
+
+  const financeMenuItems = [
+    { href: "/admin/finance/invoices", label: "Invoices & Payments", icon: Receipt },
+    { href: "/admin/finance/expenses", label: "Expenses", icon: Wallet },
+    { href: "/admin/finance/payroll", label: "Payroll System", icon: TrendingUp },
+    { href: "/admin/finance/reports", label: "Reports", icon: BarChart3 },
+  ];
+
+  const isFinanceActive = pathname?.startsWith("/admin/finance");
 
   return (
     <div className="border-b bg-card">
@@ -76,6 +91,36 @@ export default function AdminNav() {
               </Button>
             );
           })}
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant={isFinanceActive ? "default" : "ghost"}
+                size="sm"
+                className="whitespace-nowrap"
+              >
+                <DollarSign className="h-4 w-4 mr-2" />
+                Finance
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {financeMenuItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href;
+                
+                return (
+                  <DropdownMenuItem
+                    key={item.href}
+                    onClick={() => router.push(item.href)}
+                    className={isActive ? "bg-accent" : ""}
+                  >
+                    <Icon className="h-4 w-4 mr-2" />
+                    {item.label}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </div>
