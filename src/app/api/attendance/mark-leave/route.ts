@@ -47,7 +47,6 @@ export async function POST(request: NextRequest) {
       .update(attendanceRecords)
       .set({
         status: 'leave',
-        updatedAt: new Date().toISOString(),
       })
       .where(
         and(
