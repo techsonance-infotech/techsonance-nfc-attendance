@@ -7,11 +7,45 @@ export const getCurrentLocation = (): Promise<GeolocationPosition> => {
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: true,
-      timeout: 15000,
-      maximumAge: 0,
-    });
+    // First attempt with high accuracy
+    navigator.geolocation.getCurrentPosition(
+      resolve,
+      (error) => {
+        // If high accuracy fails, try with lower accuracy as fallback
+        console.warn('High accuracy failed, trying with lower accuracy:', error.message);
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          (fallbackError) => {
+            // Both attempts failed, provide detailed error
+            let errorMessage = 'Failed to get location: ';
+            switch (fallbackError.code) {
+              case fallbackError.PERMISSION_DENIED:
+                errorMessage += 'Permission denied. Please allow location access in your browser settings.';
+                break;
+              case fallbackError.POSITION_UNAVAILABLE:
+                errorMessage += 'Location information unavailable. Please check your device settings.';
+                break;
+              case fallbackError.TIMEOUT:
+                errorMessage += 'Location request timed out. Please try again.';
+                break;
+              default:
+                errorMessage += fallbackError.message || 'Unknown error occurred.';
+            }
+            reject(new Error(errorMessage));
+          },
+          {
+            enableHighAccuracy: false, // Lower accuracy, faster response
+            timeout: 20000, // 20 seconds for fallback
+            maximumAge: 60000, // Accept cached position up to 1 minute old
+          }
+        );
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000, // 10 seconds for first attempt
+        maximumAge: 0,
+      }
+    );
   });
 };
 
