@@ -67,9 +67,20 @@ export default function Home() {
       saveAttendanceRecord(record);
       setTodayRecord(record);
       toast.success("Successfully checked in!");
-    } catch (error) {
-      toast.error("Failed to get location. Please enable location services.");
-      console.error(error);
+    } catch (error: any) {
+      // Improved error handling with specific messages
+      let errorMessage = "Failed to get location. Please enable location services.";
+      
+      if (error.code === 1) {
+        errorMessage = "Location permission denied. Please allow location access in your browser settings.";
+      } else if (error.code === 2) {
+        errorMessage = "Location unavailable. Please check your device settings.";
+      } else if (error.code === 3) {
+        errorMessage = "Location request timed out. Please try again.";
+      }
+      
+      toast.error(errorMessage);
+      console.error("Geolocation error:", error);
     } finally {
       setIsChecking(false);
     }
