@@ -346,8 +346,23 @@ export async function downloadInvoicePDF(invoiceId: number, token: string) {
     // Generate PDF
     const pdf = await generateInvoicePDF(invoice, items, settings);
 
-    // Download
-    pdf.save(`${invoice.invoiceNumber}.pdf`);
+    // Download using blob and anchor element (iframe-compatible)
+    const pdfBlob = pdf.output('blob');
+    const blobUrl = URL.createObjectURL(pdfBlob);
+    
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = `${invoice.invoiceNumber}.pdf`;
+    link.style.display = 'none';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Clean up blob URL after a short delay
+    setTimeout(() => {
+      URL.revokeObjectURL(blobUrl);
+    }, 100);
   } catch (error) {
     console.error('Error generating PDF:', error);
     throw error;
@@ -389,26 +404,42 @@ export async function printInvoicePDF(invoiceId: number, token: string) {
     // Generate PDF
     const pdf = await generateInvoicePDF(invoice, items, settings);
 
-    // Open in new window for printing
-    const pdfBlob = pdf.output('blob');
-    const pdfUrl = URL.createObjectURL(pdfBlob);
+    // Get PDF as data URL (base64) for iframe-compatible printing
+    const pdfDataUri = pdf.output('dataurlstring');
     
-    // Check if we're in an iframe
-    const isInIframe = window.self !== window.top;
-    if (isInIframe) {
-      // If in iframe, send message to parent to open in new tab
-      window.parent.postMessage(
-        { type: 'OPEN_EXTERNAL_URL', data: { url: pdfUrl } },
-        '*'
-      );
-    } else {
-      // If not in iframe, open normally
-      const printWindow = window.open(pdfUrl, '_blank');
-      if (printWindow) {
-        printWindow.onload = () => {
-          printWindow.print();
-        };
-      }
+    // Create hidden iframe for printing (iframe-compatible approach)
+    const printFrame = document.createElement('iframe');
+    printFrame.style.position = 'fixed';
+    printFrame.style.right = '0';
+    printFrame.style.bottom = '0';
+    printFrame.style.width = '0';
+    printFrame.style.height = '0';
+    printFrame.style.border = 'none';
+    
+    document.body.appendChild(printFrame);
+    
+    // Write PDF to iframe and trigger print
+    if (printFrame.contentWindow) {
+      printFrame.onload = () => {
+        try {
+          if (printFrame.contentWindow) {
+            printFrame.contentWindow.focus();
+            printFrame.contentWindow.print();
+          }
+          
+          // Clean up iframe after printing (with delay to ensure print dialog opens)
+          setTimeout(() => {
+            document.body.removeChild(printFrame);
+          }, 1000);
+        } catch (error) {
+          console.error('Error triggering print:', error);
+          document.body.removeChild(printFrame);
+          throw error;
+        }
+      };
+      
+      // Load PDF into iframe
+      printFrame.src = pdfDataUri;
     }
   } catch (error) {
     console.error('Error printing PDF:', error);
