@@ -136,6 +136,20 @@ export const taxCalculations = sqliteTable('tax_calculations', {
   calculatedAt: text('calculated_at').notNull(),
 });
 
+// Invoice settings table
+export const invoiceSettings = sqliteTable('invoice_settings', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  businessName: text('business_name').notNull(),
+  businessAddress: text('business_address'),
+  businessPhone: text('business_phone'),
+  businessEmail: text('business_email'),
+  logoUrl: text('logo_url'),
+  termsAndConditions: text('terms_and_conditions'),
+  notes: text('notes'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
 // Auth tables for better-auth
 export const user = sqliteTable("user", {
   id: text("id").primaryKey(),
