@@ -376,7 +376,7 @@ export default function AdminEmployeesPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="salary">Annual Salary ($)</Label>
+                  <Label htmlFor="salary">Annual Salary (₹)</Label>
                   <Input
                     id="salary"
                     type="number"
@@ -386,7 +386,7 @@ export default function AdminEmployeesPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="hourlyRate">Hourly Rate ($)</Label>
+                  <Label htmlFor="hourlyRate">Hourly Rate (₹)</Label>
                   <Input
                     id="hourlyRate"
                     type="number"
@@ -519,7 +519,7 @@ export default function AdminEmployeesPage() {
               />
             </div>
             <div>
-              <Label htmlFor="edit-salary">Annual Salary ($)</Label>
+              <Label htmlFor="edit-salary">Annual Salary (₹)</Label>
               <Input
                 id="edit-salary"
                 type="number"
@@ -528,7 +528,7 @@ export default function AdminEmployeesPage() {
               />
             </div>
             <div>
-              <Label htmlFor="edit-hourlyRate">Hourly Rate ($)</Label>
+              <Label htmlFor="edit-hourlyRate">Hourly Rate (₹)</Label>
               <Input
                 id="edit-hourlyRate"
                 type="number"

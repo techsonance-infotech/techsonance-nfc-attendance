@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Loader2, Plus, Wallet, CheckCircle, XCircle, Clock, TrendingUp, Search, DollarSign } from "lucide-react";
+import { Loader2, Plus, Wallet, CheckCircle, XCircle, Clock, TrendingUp, Search, DollarSign, IndianRupee } from "lucide-react";
 import { useSession } from "@/lib/auth-client";
 import AdminNav from "@/components/AdminNav";
 import { toast } from "sonner";
@@ -616,7 +616,7 @@ export default function ExpensesPage() {
                           variant="outline"
                           onClick={() => handleReimburse(expense.id)}
                         >
-                          <DollarSign className="h-4 w-4 mr-1" />
+                          <IndianRupee className="h-4 w-4 mr-1" />
                           Mark Reimbursed
                         </Button>
                       )}

@@ -103,6 +103,15 @@ export default function PayrollPage() {
   const [deletingRecord, setDeletingRecord] = useState<PayrollRecord | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Format currency function
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2
+    }).format(amount);
+  };
+
   useEffect(() => {
     if (!isPending && !session?.user) {
       router.push("/login");
@@ -522,7 +531,7 @@ export default function PayrollPage() {
                             )}
                           </div>
                           <div className="text-right">
-                            <p className="text-2xl font-bold text-primary">${data.netPay.toFixed(2)}</p>
+                            <p className="text-2xl font-bold text-primary">{formatCurrency(data.netPay)}</p>
                             <p className="text-xs text-muted-foreground">Net Pay</p>
                           </div>
                         </div>
@@ -543,13 +552,13 @@ export default function PayrollPage() {
                           </div>
                           <div className="p-3 bg-muted rounded-lg">
                             <p className="text-xs text-muted-foreground mb-1">Gross Pay</p>
-                            <p className="text-lg font-semibold">${data.grossPay.toFixed(2)}</p>
+                            <p className="text-lg font-semibold">{formatCurrency(data.grossPay)}</p>
                           </div>
                         </div>
                         <div className="mt-4 p-3 bg-destructive/10 rounded-lg">
                           <div className="flex justify-between items-center">
                             <span className="text-sm text-muted-foreground">Deductions (15%)</span>
-                            <span className="font-semibold text-destructive">-${data.deductions.toFixed(2)}</span>
+                            <span className="font-semibold text-destructive">-{formatCurrency(data.deductions)}</span>
                           </div>
                         </div>
                         {existingRecord && (
