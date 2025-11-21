@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, TrendingUp, TrendingDown, DollarSign, FileText, Download } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, IndianRupee, FileText, Download } from "lucide-react";
 import { useSession } from "@/lib/auth-client";
 import AdminNav from "@/components/AdminNav";
 import { toast } from "sonner";
