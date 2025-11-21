@@ -404,43 +404,36 @@ export async function printInvoicePDF(invoiceId: number, token: string) {
     // Generate PDF
     const pdf = await generateInvoicePDF(invoice, items, settings);
 
-    // Get PDF as data URL (base64) for iframe-compatible printing
-    const pdfDataUri = pdf.output('dataurlstring');
+    // Get PDF as blob
+    const pdfBlob = pdf.output('blob');
+    const blobUrl = URL.createObjectURL(pdfBlob);
     
-    // Create hidden iframe for printing (iframe-compatible approach)
-    const printFrame = document.createElement('iframe');
-    printFrame.style.position = 'fixed';
-    printFrame.style.right = '0';
-    printFrame.style.bottom = '0';
-    printFrame.style.width = '0';
-    printFrame.style.height = '0';
-    printFrame.style.border = 'none';
+    // Check if we're in an iframe
+    const isInIframe = window.self !== window.top;
     
-    document.body.appendChild(printFrame);
-    
-    // Write PDF to iframe and trigger print
-    if (printFrame.contentWindow) {
-      printFrame.onload = () => {
-        try {
-          if (printFrame.contentWindow) {
-            printFrame.contentWindow.focus();
-            printFrame.contentWindow.print();
-          }
-          
-          // Clean up iframe after printing (with delay to ensure print dialog opens)
-          setTimeout(() => {
-            document.body.removeChild(printFrame);
-          }, 1000);
-        } catch (error) {
-          console.error('Error triggering print:', error);
-          document.body.removeChild(printFrame);
-          throw error;
-        }
-      };
-      
-      // Load PDF into iframe
-      printFrame.src = pdfDataUri;
+    if (isInIframe) {
+      // If in iframe, post message to parent to open in new tab for printing
+      window.parent.postMessage(
+        { 
+          type: 'OPEN_EXTERNAL_URL', 
+          data: { url: blobUrl } 
+        }, 
+        '*'
+      );
+    } else {
+      // If not in iframe, open in new window
+      const printWindow = window.open(blobUrl, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
     }
+    
+    // Clean up blob URL after a delay
+    setTimeout(() => {
+      URL.revokeObjectURL(blobUrl);
+    }, 5000);
   } catch (error) {
     console.error('Error printing PDF:', error);
     throw error;
