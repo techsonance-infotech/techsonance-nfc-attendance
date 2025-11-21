@@ -175,10 +175,14 @@ export default function InvoicesPage() {
           taxAmount,
           totalAmount: total,
           status: "draft",
+          createdBy: session?.user?.id,
         }),
       });
 
-      if (!invoiceRes.ok) throw new Error("Failed to create invoice");
+      if (!invoiceRes.ok) {
+        const errorData = await invoiceRes.json();
+        throw new Error(errorData.error || "Failed to create invoice");
+      }
       const invoice = await invoiceRes.json();
 
       for (const item of items) {
@@ -201,7 +205,7 @@ export default function InvoicesPage() {
       loadData();
     } catch (error) {
       console.error("Error creating invoice:", error);
-      toast.error("Failed to create invoice");
+      toast.error(error instanceof Error ? error.message : "Failed to create invoice");
     } finally {
       setIsCreating(false);
     }
