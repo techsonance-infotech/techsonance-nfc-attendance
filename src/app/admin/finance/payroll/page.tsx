@@ -7,7 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Calendar, DollarSign, Loader2, TrendingUp, TrendingDown, FileText, Download } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar, DollarSign, Loader2, TrendingUp, TrendingDown, FileText, Download, Edit, Trash2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import AdminNav from "@/components/AdminNav";
 
@@ -41,14 +44,63 @@ interface PayrollData {
   netPay: number;
 }
 
+interface PayrollRecord {
+  id: number;
+  employeeId: number;
+  month: number;
+  year: number;
+  basicSalary: number;
+  allowances: number;
+  deductions: number;
+  grossSalary: number;
+  netSalary: number;
+  pfAmount: number;
+  esicAmount: number;
+  tdsAmount: number;
+  status: string;
+  paymentDate: string | null;
+}
+
+interface EditFormData {
+  basicSalary: string;
+  allowances: string;
+  deductions: string;
+  pfAmount: string;
+  esicAmount: string;
+  tdsAmount: string;
+  status: string;
+  paymentDate: string;
+}
+
 export default function PayrollPage() {
   const router = useRouter();
   const { data: session, isPending } = useSession();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [payrollData, setPayrollData] = useState<PayrollData[]>([]);
+  const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [searchTerm, setSearchTerm] = useState("");
+  
+  // Edit dialog state
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<PayrollRecord | null>(null);
+  const [editFormData, setEditFormData] = useState<EditFormData>({
+    basicSalary: "",
+    allowances: "",
+    deductions: "",
+    pfAmount: "",
+    esicAmount: "",
+    tdsAmount: "",
+    status: "draft",
+    paymentDate: ""
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Delete dialog state
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deletingRecord, setDeletingRecord] = useState<PayrollRecord | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (!isPending && !session?.user) {
@@ -126,11 +178,143 @@ export default function PayrollPage() {
       }
 
       setPayrollData(payrollResults);
+
+      // Load existing payroll records for the selected month
+      const [year, month] = selectedMonth.split('-');
+      const payrollResponse = await fetch(`/api/payroll?month=${month}&year=${year}`);
+      if (payrollResponse.ok) {
+        const records = await payrollResponse.json();
+        setPayrollRecords(records);
+      }
     } catch (error) {
       console.error("Error loading payroll data:", error);
       toast.error("Failed to load payroll data");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleEdit = (employeeId: number) => {
+    const record = payrollRecords.find(r => r.employeeId === employeeId);
+    if (record) {
+      setEditingRecord(record);
+      setEditFormData({
+        basicSalary: record.basicSalary.toString(),
+        allowances: record.allowances.toString(),
+        deductions: record.deductions.toString(),
+        pfAmount: record.pfAmount.toString(),
+        esicAmount: record.esicAmount.toString(),
+        tdsAmount: record.tdsAmount.toString(),
+        status: record.status,
+        paymentDate: record.paymentDate || ""
+      });
+      setIsEditDialogOpen(true);
+    }
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editingRecord) return;
+
+    try {
+      setIsSubmitting(true);
+
+      const basicSalary = parseFloat(editFormData.basicSalary);
+      const allowances = parseFloat(editFormData.allowances);
+      const deductions = parseFloat(editFormData.deductions);
+      const pfAmount = parseFloat(editFormData.pfAmount);
+      const esicAmount = parseFloat(editFormData.esicAmount);
+      const tdsAmount = parseFloat(editFormData.tdsAmount);
+
+      // Validation
+      if (isNaN(basicSalary) || basicSalary < 0) {
+        toast.error("Basic salary must be a valid positive number");
+        return;
+      }
+      if (isNaN(allowances) || allowances < 0) {
+        toast.error("Allowances must be a valid positive number");
+        return;
+      }
+      if (isNaN(deductions) || deductions < 0) {
+        toast.error("Deductions must be a valid positive number");
+        return;
+      }
+
+      // Calculate gross and net salary
+      const grossSalary = basicSalary + allowances;
+      const netSalary = grossSalary - deductions - pfAmount - esicAmount - tdsAmount;
+
+      const response = await fetch(`/api/payroll/${editingRecord.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("bearer_token")}`
+        },
+        body: JSON.stringify({
+          basicSalary,
+          allowances,
+          deductions,
+          grossSalary,
+          netSalary,
+          pfAmount,
+          esicAmount,
+          tdsAmount,
+          status: editFormData.status,
+          paymentDate: editFormData.paymentDate || null
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update payroll");
+      }
+
+      toast.success("Payroll record updated successfully");
+      setIsEditDialogOpen(false);
+      setEditingRecord(null);
+      await loadPayrollData();
+    } catch (error) {
+      console.error("Error updating payroll:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to update payroll");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = (employeeId: number) => {
+    const record = payrollRecords.find(r => r.employeeId === employeeId);
+    if (record) {
+      setDeletingRecord(record);
+      setIsDeleteDialogOpen(true);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingRecord) return;
+
+    try {
+      setIsDeleting(true);
+
+      const response = await fetch(`/api/payroll/${deletingRecord.id}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("bearer_token")}`
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete payroll");
+      }
+
+      toast.success("Payroll record deleted successfully");
+      setIsDeleteDialogOpen(false);
+      setDeletingRecord(null);
+      await loadPayrollData();
+    } catch (error) {
+      console.error("Error deleting payroll:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to delete payroll");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -167,6 +351,10 @@ export default function PayrollPage() {
   const totalGrossPay = filteredPayrollData.reduce((sum, data) => sum + data.grossPay, 0);
   const totalNetPay = filteredPayrollData.reduce((sum, data) => sum + data.netPay, 0);
   const totalDeductions = filteredPayrollData.reduce((sum, data) => sum + data.deductions, 0);
+
+  const getEmployeeRecord = (employeeId: number) => {
+    return payrollRecords.find(r => r.employeeId === employeeId);
+  };
 
   if (isPending || isLoading) {
     return (
@@ -270,58 +458,212 @@ export default function PayrollPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredPayrollData.map((data) => (
-                  <Card key={data.employee.id} className="border">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle className="text-lg">{data.employee.name}</CardTitle>
-                          <p className="text-sm text-muted-foreground">{data.employee.email}</p>
-                          {data.employee.department && (
-                            <Badge variant="outline" className="mt-2">
-                              {data.employee.department}
-                            </Badge>
-                          )}
+                {filteredPayrollData.map((data) => {
+                  const existingRecord = getEmployeeRecord(data.employee.id);
+                  return (
+                    <Card key={data.employee.id} className="border">
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <CardTitle className="text-lg">{data.employee.name}</CardTitle>
+                            <p className="text-sm text-muted-foreground">{data.employee.email}</p>
+                            {data.employee.department && (
+                              <Badge variant="outline" className="mt-2">
+                                {data.employee.department}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold text-primary">${data.netPay.toFixed(2)}</p>
+                            <p className="text-xs text-muted-foreground">Net Pay</p>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-primary">${data.netPay.toFixed(2)}</p>
-                          <p className="text-xs text-muted-foreground">Net Pay</p>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="p-3 bg-muted rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-1">Present Days</p>
+                            <p className="text-lg font-semibold text-green-600">{data.presentDays}</p>
+                          </div>
+                          <div className="p-3 bg-muted rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-1">Leave Days</p>
+                            <p className="text-lg font-semibold text-orange-600">{data.leaveDays}</p>
+                          </div>
+                          <div className="p-3 bg-muted rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-1">Total Hours</p>
+                            <p className="text-lg font-semibold">{data.totalHours.toFixed(1)}h</p>
+                          </div>
+                          <div className="p-3 bg-muted rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-1">Gross Pay</p>
+                            <p className="text-lg font-semibold">${data.grossPay.toFixed(2)}</p>
+                          </div>
                         </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="p-3 bg-muted rounded-lg">
-                          <p className="text-xs text-muted-foreground mb-1">Present Days</p>
-                          <p className="text-lg font-semibold text-green-600">{data.presentDays}</p>
+                        <div className="mt-4 p-3 bg-destructive/10 rounded-lg">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">Deductions (15%)</span>
+                            <span className="font-semibold text-destructive">-${data.deductions.toFixed(2)}</span>
+                          </div>
                         </div>
-                        <div className="p-3 bg-muted rounded-lg">
-                          <p className="text-xs text-muted-foreground mb-1">Leave Days</p>
-                          <p className="text-lg font-semibold text-orange-600">{data.leaveDays}</p>
-                        </div>
-                        <div className="p-3 bg-muted rounded-lg">
-                          <p className="text-xs text-muted-foreground mb-1">Total Hours</p>
-                          <p className="text-lg font-semibold">{data.totalHours.toFixed(1)}h</p>
-                        </div>
-                        <div className="p-3 bg-muted rounded-lg">
-                          <p className="text-xs text-muted-foreground mb-1">Gross Pay</p>
-                          <p className="text-lg font-semibold">${data.grossPay.toFixed(2)}</p>
-                        </div>
-                      </div>
-                      <div className="mt-4 p-3 bg-destructive/10 rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">Deductions (15%)</span>
-                          <span className="font-semibold text-destructive">-${data.deductions.toFixed(2)}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                        {existingRecord && (
+                          <div className="mt-4 flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(data.employee.id)}
+                              className="gap-2"
+                            >
+                              <Edit className="h-4 w-4" />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDelete(data.employee.id)}
+                              className="gap-2"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Delete
+                            </Button>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Payroll Record</DialogTitle>
+            <DialogDescription>
+              Update payroll details for {employees.find(e => e.id === editingRecord?.employeeId)?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="basicSalary">Basic Salary</Label>
+              <Input
+                id="basicSalary"
+                type="number"
+                step="0.01"
+                value={editFormData.basicSalary}
+                onChange={(e) => setEditFormData({ ...editFormData, basicSalary: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="allowances">Allowances</Label>
+              <Input
+                id="allowances"
+                type="number"
+                step="0.01"
+                value={editFormData.allowances}
+                onChange={(e) => setEditFormData({ ...editFormData, allowances: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="deductions">Deductions</Label>
+              <Input
+                id="deductions"
+                type="number"
+                step="0.01"
+                value={editFormData.deductions}
+                onChange={(e) => setEditFormData({ ...editFormData, deductions: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pfAmount">PF Amount</Label>
+              <Input
+                id="pfAmount"
+                type="number"
+                step="0.01"
+                value={editFormData.pfAmount}
+                onChange={(e) => setEditFormData({ ...editFormData, pfAmount: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="esicAmount">ESIC Amount</Label>
+              <Input
+                id="esicAmount"
+                type="number"
+                step="0.01"
+                value={editFormData.esicAmount}
+                onChange={(e) => setEditFormData({ ...editFormData, esicAmount: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tdsAmount">TDS Amount</Label>
+              <Input
+                id="tdsAmount"
+                type="number"
+                step="0.01"
+                value={editFormData.tdsAmount}
+                onChange={(e) => setEditFormData({ ...editFormData, tdsAmount: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="status">Status</Label>
+              <Select value={editFormData.status} onValueChange={(value) => setEditFormData({ ...editFormData, status: value })}>
+                <SelectTrigger id="status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="processed">Processed</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="paymentDate">Payment Date</Label>
+              <Input
+                id="paymentDate"
+                type="date"
+                value={editFormData.paymentDate}
+                onChange={(e) => setEditFormData({ ...editFormData, paymentDate: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleEditSubmit} disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Delete Payroll Record
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the payroll record for {employees.find(e => e.id === deletingRecord?.employeeId)?.name}? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={isDeleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={isDeleting}>
+              {isDeleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
