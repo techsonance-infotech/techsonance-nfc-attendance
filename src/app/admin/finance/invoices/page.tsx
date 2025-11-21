@@ -10,10 +10,12 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Loader2, Plus, Receipt, IndianRupee, AlertCircle, FileText, Search } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Loader2, Plus, Receipt, IndianRupee, AlertCircle, FileText, Search, Download, Printer, Edit, Trash2, Settings, MoreVertical } from "lucide-react";
 import { useSession } from "@/lib/auth-client";
 import AdminNav from "@/components/AdminNav";
 import { toast } from "sonner";
+import { downloadInvoicePDF, printInvoicePDF } from "@/lib/invoice-pdf";
 
 interface Invoice {
   id: number;
@@ -33,6 +35,7 @@ interface Invoice {
 }
 
 interface InvoiceItem {
+  id?: number;
   description: string;
   quantity: number;
   unitPrice: number;
@@ -46,9 +49,15 @@ export default function InvoicesPage() {
   const [overdueInvoices, setOverdueInvoices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [editItems, setEditItems] = useState<InvoiceItem[]>([]);
 
   const [formData, setFormData] = useState({
     clientName: "",
@@ -123,6 +132,13 @@ export default function InvoicesPage() {
     return { subtotal, taxAmount, total };
   };
 
+  const calculateEditTotals = () => {
+    const subtotal = editItems.reduce((sum, item) => sum + item.amount, 0);
+    const taxAmount = (subtotal * formData.taxRate) / 100;
+    const total = subtotal + taxAmount;
+    return { subtotal, taxAmount, total };
+  };
+
   const handleItemChange = (index: number, field: keyof InvoiceItem, value: any) => {
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
@@ -137,13 +153,37 @@ export default function InvoicesPage() {
     setItems(newItems);
   };
 
+  const handleEditItemChange = (index: number, field: keyof InvoiceItem, value: any) => {
+    const newItems = [...editItems];
+    newItems[index] = { ...newItems[index], [field]: value };
+    
+    if (field === "quantity" || field === "unitPrice") {
+      newItems[index].amount = calculateItemAmount(
+        newItems[index].quantity,
+        newItems[index].unitPrice
+      );
+    }
+    
+    setEditItems(newItems);
+  };
+
   const addItem = () => {
     setItems([...items, { description: "", quantity: 1, unitPrice: 0, amount: 0 }]);
+  };
+
+  const addEditItem = () => {
+    setEditItems([...editItems, { description: "", quantity: 1, unitPrice: 0, amount: 0 }]);
   };
 
   const removeItem = (index: number) => {
     if (items.length > 1) {
       setItems(items.filter((_, i) => i !== index));
+    }
+  };
+
+  const removeEditItem = (index: number) => {
+    if (editItems.length > 1) {
+      setEditItems(editItems.filter((_, i) => i !== index));
     }
   };
 
@@ -211,6 +251,186 @@ export default function InvoicesPage() {
     }
   };
 
+  const handleEditInvoice = async (invoice: Invoice) => {
+    setSelectedInvoice(invoice);
+    setFormData({
+      clientName: invoice.clientName,
+      clientEmail: invoice.clientEmail,
+      clientAddress: invoice.clientAddress || "",
+      issueDate: invoice.issueDate,
+      dueDate: invoice.dueDate,
+      taxRate: invoice.taxRate,
+      notes: invoice.notes || "",
+    });
+
+    // Fetch invoice items
+    try {
+      const token = localStorage.getItem("bearer_token");
+      const itemsRes = await fetch(`/api/invoice-items?invoice_id=${invoice.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (itemsRes.ok) {
+        const itemsData = await itemsRes.json();
+        setEditItems(itemsData.length > 0 ? itemsData : [{ description: "", quantity: 1, unitPrice: 0, amount: 0 }]);
+      }
+    } catch (error) {
+      console.error("Error loading invoice items:", error);
+      toast.error("Failed to load invoice items");
+      setEditItems([{ description: "", quantity: 1, unitPrice: 0, amount: 0 }]);
+    }
+
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateInvoice = async () => {
+    if (!formData.clientName || !formData.clientEmail) {
+      toast.error("Please fill in client name and email");
+      return;
+    }
+
+    if (editItems.some(item => !item.description)) {
+      toast.error("Please fill in all item descriptions");
+      return;
+    }
+
+    if (!selectedInvoice) return;
+
+    setIsUpdating(true);
+    try {
+      const token = localStorage.getItem("bearer_token");
+      const { subtotal, taxAmount, total } = calculateEditTotals();
+
+      const invoiceRes = await fetch(`/api/invoices?id=${selectedInvoice.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...formData,
+          subtotal,
+          taxAmount,
+          totalAmount: total,
+        }),
+      });
+
+      if (!invoiceRes.ok) {
+        const errorData = await invoiceRes.json();
+        throw new Error(errorData.error || "Failed to update invoice");
+      }
+
+      // Delete all existing items
+      const existingItemsRes = await fetch(`/api/invoice-items?invoice_id=${selectedInvoice.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const existingItems = await existingItemsRes.json();
+      
+      for (const item of existingItems) {
+        await fetch(`/api/invoice-items?id=${item.id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+
+      // Create new items
+      for (const item of editItems) {
+        await fetch("/api/invoice-items", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            invoiceId: selectedInvoice.id,
+            description: item.description,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            amount: item.amount,
+          }),
+        });
+      }
+
+      toast.success("Invoice updated successfully");
+      setIsEditDialogOpen(false);
+      setSelectedInvoice(null);
+      resetForm();
+      loadData();
+    } catch (error) {
+      console.error("Error updating invoice:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to update invoice");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDeleteInvoice = async () => {
+    if (!selectedInvoice) return;
+
+    setIsDeleting(true);
+    try {
+      const token = localStorage.getItem("bearer_token");
+      
+      const response = await fetch(`/api/invoices?id=${selectedInvoice.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete invoice");
+      }
+
+      toast.success("Invoice deleted successfully");
+      setIsDeleteDialogOpen(false);
+      setSelectedInvoice(null);
+      loadData();
+    } catch (error) {
+      console.error("Error deleting invoice:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to delete invoice");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDownloadPDF = async (invoiceId: number) => {
+    try {
+      const token = localStorage.getItem("bearer_token");
+      if (!token) {
+        toast.error("Authentication required");
+        return;
+      }
+      
+      toast.loading("Generating PDF...");
+      await downloadInvoicePDF(invoiceId, token);
+      toast.dismiss();
+      toast.success("PDF downloaded successfully");
+    } catch (error) {
+      toast.dismiss();
+      console.error("Error downloading PDF:", error);
+      toast.error("Failed to download PDF");
+    }
+  };
+
+  const handlePrintPDF = async (invoiceId: number) => {
+    try {
+      const token = localStorage.getItem("bearer_token");
+      if (!token) {
+        toast.error("Authentication required");
+        return;
+      }
+      
+      toast.loading("Preparing invoice for printing...");
+      await printInvoicePDF(invoiceId, token);
+      toast.dismiss();
+      toast.success("Opening print dialog...");
+    } catch (error) {
+      toast.dismiss();
+      console.error("Error printing PDF:", error);
+      toast.error("Failed to print PDF");
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       clientName: "",
@@ -222,6 +442,7 @@ export default function InvoicesPage() {
       notes: "",
     });
     setItems([{ description: "", quantity: 1, unitPrice: 0, amount: 0 }]);
+    setEditItems([]);
   };
 
   const filteredInvoices = invoices.filter((invoice) => {
@@ -257,6 +478,7 @@ export default function InvoicesPage() {
   };
 
   const { subtotal, taxAmount, total } = calculateTotals();
+  const editTotals = selectedInvoice ? calculateEditTotals() : { subtotal: 0, taxAmount: 0, total: 0 };
 
   if (isPending || isLoading) {
     return (
@@ -284,183 +506,385 @@ export default function InvoicesPage() {
             <p className="text-muted-foreground">Manage invoices, track payments, and monitor overdue accounts</p>
           </div>
           
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Invoice
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Create New Invoice</DialogTitle>
-                <DialogDescription>Fill in the invoice details and add line items</DialogDescription>
-              </DialogHeader>
-              
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="clientName">Client Name *</Label>
-                    <Input
-                      id="clientName"
-                      value={formData.clientName}
-                      onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-                      placeholder="Enter client name"
-                    />
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => router.push("/admin/finance/invoices/settings")}
+            >
+              <Settings className="h-4 w-4 mr-2" />
+              Settings
+            </Button>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Invoice
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Create New Invoice</DialogTitle>
+                  <DialogDescription>Fill in the invoice details and add line items</DialogDescription>
+                </DialogHeader>
+                
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="clientName">Client Name *</Label>
+                      <Input
+                        id="clientName"
+                        value={formData.clientName}
+                        onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
+                        placeholder="Enter client name"
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="clientEmail">Client Email *</Label>
+                      <Input
+                        id="clientEmail"
+                        type="email"
+                        value={formData.clientEmail}
+                        onChange={(e) => setFormData({ ...formData, clientEmail: e.target.value })}
+                        placeholder="client@example.com"
+                      />
+                    </div>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="clientEmail">Client Email *</Label>
-                    <Input
-                      id="clientEmail"
-                      type="email"
-                      value={formData.clientEmail}
-                      onChange={(e) => setFormData({ ...formData, clientEmail: e.target.value })}
-                      placeholder="client@example.com"
-                    />
-                  </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="clientAddress">Client Address</Label>
-                  <Textarea
-                    id="clientAddress"
-                    value={formData.clientAddress}
-                    onChange={(e) => setFormData({ ...formData, clientAddress: e.target.value })}
-                    placeholder="Enter client address"
-                    rows={2}
-                  />
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="clientAddress">Client Address</Label>
+                    <Textarea
+                      id="clientAddress"
+                      value={formData.clientAddress}
+                      onChange={(e) => setFormData({ ...formData, clientAddress: e.target.value })}
+                      placeholder="Enter client address"
+                      rows={2}
+                    />
+                  </div>
 
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="issueDate">Issue Date</Label>
-                    <Input
-                      id="issueDate"
-                      type="date"
-                      value={formData.issueDate}
-                      onChange={(e) => setFormData({ ...formData, issueDate: e.target.value })}
-                    />
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="issueDate">Issue Date</Label>
+                      <Input
+                        id="issueDate"
+                        type="date"
+                        value={formData.issueDate}
+                        onChange={(e) => setFormData({ ...formData, issueDate: e.target.value })}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="dueDate">Due Date</Label>
+                      <Input
+                        id="dueDate"
+                        type="date"
+                        value={formData.dueDate}
+                        onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="taxRate">GST Rate (%)</Label>
+                      <Input
+                        id="taxRate"
+                        type="number"
+                        value={formData.taxRate}
+                        onChange={(e) => setFormData({ ...formData, taxRate: parseFloat(e.target.value) })}
+                      />
+                    </div>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="dueDate">Due Date</Label>
-                    <Input
-                      id="dueDate"
-                      type="date"
-                      value={formData.dueDate}
-                      onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="taxRate">GST Rate (%)</Label>
-                    <Input
-                      id="taxRate"
-                      type="number"
-                      value={formData.taxRate}
-                      onChange={(e) => setFormData({ ...formData, taxRate: parseFloat(e.target.value) })}
-                    />
-                  </div>
-                </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Line Items</Label>
-                    <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Item
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Line Items</Label>
+                      <Button type="button" variant="outline" size="sm" onClick={addItem}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Item
+                      </Button>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      {items.map((item, index) => (
+                        <div key={index} className="grid grid-cols-12 gap-2 items-end">
+                          <div className="col-span-5">
+                            <Input
+                              placeholder="Description"
+                              value={item.description}
+                              onChange={(e) => handleItemChange(index, "description", e.target.value)}
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Input
+                              type="number"
+                              placeholder="Qty"
+                              value={item.quantity}
+                              onChange={(e) => handleItemChange(index, "quantity", parseFloat(e.target.value))}
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Input
+                              type="number"
+                              placeholder="Price"
+                              value={item.unitPrice}
+                              onChange={(e) => handleItemChange(index, "unitPrice", parseFloat(e.target.value))}
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Input
+                              value={formatCurrency(item.amount)}
+                              disabled
+                            />
+                          </div>
+                          <div className="col-span-1">
+                            {items.length > 1 && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeItem(index)}
+                              >
+                                ×
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 border-t pt-4">
+                    <div className="flex justify-between text-sm">
+                      <span>Subtotal:</span>
+                      <span className="font-medium">{formatCurrency(subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>GST ({formData.taxRate}%):</span>
+                      <span className="font-medium">{formatCurrency(taxAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-lg font-bold border-t pt-2">
+                      <span>Total:</span>
+                      <span>{formatCurrency(total)}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="notes">Notes</Label>
+                    <Textarea
+                      id="notes"
+                      value={formData.notes}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      placeholder="Additional notes or payment terms"
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleCreateInvoice} disabled={isCreating}>
+                      {isCreating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      Create Invoice
                     </Button>
                   </div>
-                  
-                  <div className="space-y-2">
-                    {items.map((item, index) => (
-                      <div key={index} className="grid grid-cols-12 gap-2 items-end">
-                        <div className="col-span-5">
-                          <Input
-                            placeholder="Description"
-                            value={item.description}
-                            onChange={(e) => handleItemChange(index, "description", e.target.value)}
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <Input
-                            type="number"
-                            placeholder="Qty"
-                            value={item.quantity}
-                            onChange={(e) => handleItemChange(index, "quantity", parseFloat(e.target.value))}
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <Input
-                            type="number"
-                            placeholder="Price"
-                            value={item.unitPrice}
-                            onChange={(e) => handleItemChange(index, "unitPrice", parseFloat(e.target.value))}
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <Input
-                            value={formatCurrency(item.amount)}
-                            disabled
-                          />
-                        </div>
-                        <div className="col-span-1">
-                          {items.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeItem(index)}
-                            >
-                              ×
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
 
-                <div className="space-y-2 border-t pt-4">
-                  <div className="flex justify-between text-sm">
-                    <span>Subtotal:</span>
-                    <span className="font-medium">{formatCurrency(subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>GST ({formData.taxRate}%):</span>
-                    <span className="font-medium">{formatCurrency(taxAmount)}</span>
-                  </div>
-                  <div className="flex justify-between text-lg font-bold border-t pt-2">
-                    <span>Total:</span>
-                    <span>{formatCurrency(total)}</span>
-                  </div>
-                </div>
-
+        {/* Edit Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Invoice</DialogTitle>
+              <DialogDescription>Update invoice details and line items</DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="notes">Notes</Label>
-                  <Textarea
-                    id="notes"
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder="Additional notes or payment terms"
-                    rows={3}
+                  <Label htmlFor="editClientName">Client Name *</Label>
+                  <Input
+                    id="editClientName"
+                    value={formData.clientName}
+                    onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
+                    placeholder="Enter client name"
                   />
                 </div>
-
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleCreateInvoice} disabled={isCreating}>
-                    {isCreating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    Create Invoice
-                  </Button>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="editClientEmail">Client Email *</Label>
+                  <Input
+                    id="editClientEmail"
+                    type="email"
+                    value={formData.clientEmail}
+                    onChange={(e) => setFormData({ ...formData, clientEmail: e.target.value })}
+                    placeholder="client@example.com"
+                  />
                 </div>
               </div>
-            </DialogContent>
-          </Dialog>
-        </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="editClientAddress">Client Address</Label>
+                <Textarea
+                  id="editClientAddress"
+                  value={formData.clientAddress}
+                  onChange={(e) => setFormData({ ...formData, clientAddress: e.target.value })}
+                  placeholder="Enter client address"
+                  rows={2}
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="editIssueDate">Issue Date</Label>
+                  <Input
+                    id="editIssueDate"
+                    type="date"
+                    value={formData.issueDate}
+                    onChange={(e) => setFormData({ ...formData, issueDate: e.target.value })}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="editDueDate">Due Date</Label>
+                  <Input
+                    id="editDueDate"
+                    type="date"
+                    value={formData.dueDate}
+                    onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="editTaxRate">GST Rate (%)</Label>
+                  <Input
+                    id="editTaxRate"
+                    type="number"
+                    value={formData.taxRate}
+                    onChange={(e) => setFormData({ ...formData, taxRate: parseFloat(e.target.value) })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Line Items</Label>
+                  <Button type="button" variant="outline" size="sm" onClick={addEditItem}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Item
+                  </Button>
+                </div>
+                
+                <div className="space-y-2">
+                  {editItems.map((item, index) => (
+                    <div key={index} className="grid grid-cols-12 gap-2 items-end">
+                      <div className="col-span-5">
+                        <Input
+                          placeholder="Description"
+                          value={item.description}
+                          onChange={(e) => handleEditItemChange(index, "description", e.target.value)}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Input
+                          type="number"
+                          placeholder="Qty"
+                          value={item.quantity}
+                          onChange={(e) => handleEditItemChange(index, "quantity", parseFloat(e.target.value))}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Input
+                          type="number"
+                          placeholder="Price"
+                          value={item.unitPrice}
+                          onChange={(e) => handleEditItemChange(index, "unitPrice", parseFloat(e.target.value))}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Input
+                          value={formatCurrency(item.amount)}
+                          disabled
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        {editItems.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeEditItem(index)}
+                          >
+                            ×
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2 border-t pt-4">
+                <div className="flex justify-between text-sm">
+                  <span>Subtotal:</span>
+                  <span className="font-medium">{formatCurrency(editTotals.subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>GST ({formData.taxRate}%):</span>
+                  <span className="font-medium">{formatCurrency(editTotals.taxAmount)}</span>
+                </div>
+                <div className="flex justify-between text-lg font-bold border-t pt-2">
+                  <span>Total:</span>
+                  <span>{formatCurrency(editTotals.total)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="editNotes">Notes</Label>
+                <Textarea
+                  id="editNotes"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="Additional notes or payment terms"
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleUpdateInvoice} disabled={isUpdating}>
+                  {isUpdating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Update Invoice
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Invoice</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete invoice {selectedInvoice?.invoiceNumber}? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteInvoice} disabled={isDeleting}>
+                {isDeleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Delete
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Stats Grid */}
         <div className="grid gap-4 md:grid-cols-4">
@@ -540,7 +964,7 @@ export default function InvoicesPage() {
           </Card>
         )}
 
-        {/* Invoices List */}
+        {/* Invoices List with Actions */}
         <Card>
           <CardHeader>
             <CardTitle>All Invoices</CardTitle>
@@ -592,11 +1016,44 @@ export default function InvoicesPage() {
                         {invoice.invoiceNumber} • Due: {formatDate(invoice.dueDate)}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold">{formatCurrency(invoice.totalAmount)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        GST: {formatCurrency(invoice.taxAmount)}
-                      </p>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right mr-4">
+                        <p className="font-bold">{formatCurrency(invoice.totalAmount)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          GST: {formatCurrency(invoice.taxAmount)}
+                        </p>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleDownloadPDF(invoice.id)}>
+                            <Download className="h-4 w-4 mr-2" />
+                            Download PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handlePrintPDF(invoice.id)}>
+                            <Printer className="h-4 w-4 mr-2" />
+                            Print
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEditInvoice(invoice)}>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedInvoice(invoice);
+                              setIsDeleteDialogOpen(true);
+                            }}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 ))}
