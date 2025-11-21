@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Loader2, Save, ArrowLeft, Building2, Upload } from "lucide-react";
 import { useSession } from "@/lib/auth-client";
 import AdminNav from "@/components/AdminNav";
@@ -32,6 +33,8 @@ export default function InvoiceSettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [settings, setSettings] = useState<InvoiceSettings | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [isLogoDialogOpen, setIsLogoDialogOpen] = useState(false);
+  const [logoUrlInput, setLogoUrlInput] = useState("");
 
   const [formData, setFormData] = useState({
     businessName: "",
@@ -98,6 +101,14 @@ export default function InvoiceSettingsPage() {
   const handleLogoUrlChange = (url: string) => {
     setFormData({ ...formData, logoUrl: url });
     setLogoPreview(url);
+  };
+
+  const handleLogoDialogSubmit = () => {
+    if (logoUrlInput.trim()) {
+      handleLogoUrlChange(logoUrlInput);
+      setIsLogoDialogOpen(false);
+      setLogoUrlInput("");
+    }
   };
 
   const handleSave = async () => {
@@ -234,7 +245,7 @@ export default function InvoiceSettingsPage() {
               />
             </div>
 
-            {/* Logo URL */}
+            {/* Logo URL - FIXED */}
             <div className="space-y-2">
               <Label htmlFor="logoUrl">Logo URL</Label>
               <div className="flex gap-2">
@@ -244,17 +255,59 @@ export default function InvoiceSettingsPage() {
                   onChange={(e) => handleLogoUrlChange(e.target.value)}
                   placeholder="https://example.com/logo.png"
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => {
-                    const url = prompt("Enter logo URL:");
-                    if (url) handleLogoUrlChange(url);
-                  }}
-                >
-                  <Upload className="h-4 w-4" />
-                </Button>
+                <Dialog open={isLogoDialogOpen} onOpenChange={setIsLogoDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                    >
+                      <Upload className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add Logo URL</DialogTitle>
+                      <DialogDescription>
+                        Enter the URL of your business logo image
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="logoUrlDialog">Logo URL</Label>
+                        <Input
+                          id="logoUrlDialog"
+                          value={logoUrlInput}
+                          onChange={(e) => setLogoUrlInput(e.target.value)}
+                          placeholder="https://example.com/logo.png"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleLogoDialogSubmit();
+                            }
+                          }}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Paste a direct link to your logo image (PNG, JPG, SVG)
+                        </p>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setIsLogoDialogOpen(false);
+                            setLogoUrlInput("");
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        <Button onClick={handleLogoDialogSubmit}>
+                          Add Logo
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
               {logoPreview && (
                 <div className="mt-2 p-4 border rounded-lg bg-muted/50">
