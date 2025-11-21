@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, DollarSign, Loader2, TrendingUp, TrendingDown, FileText, Download, Edit, Trash2, AlertTriangle } from "lucide-react";
+import { Calendar, DollarSign, Loader2, TrendingUp, TrendingDown, FileText, Download, Edit, Trash2, AlertTriangle, Plus } from "lucide-react";
 import { toast } from "sonner";
 import AdminNav from "@/components/AdminNav";
 
@@ -81,6 +81,7 @@ export default function PayrollPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [searchTerm, setSearchTerm] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
   
   // Edit dialog state
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -191,6 +192,39 @@ export default function PayrollPage() {
       toast.error("Failed to load payroll data");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleGeneratePayroll = async () => {
+    try {
+      setIsGenerating(true);
+      const [year, month] = selectedMonth.split('-');
+      
+      const response = await fetch("/api/payroll/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("bearer_token")}`
+        },
+        body: JSON.stringify({
+          month: parseInt(month),
+          year: parseInt(year)
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to generate payroll");
+      }
+
+      const result = await response.json();
+      toast.success(`Payroll generated for ${result.count} employees`);
+      await loadPayrollData();
+    } catch (error) {
+      console.error("Error generating payroll:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to generate payroll");
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -392,10 +426,24 @@ export default function PayrollPage() {
               className="w-auto"
             />
           </div>
-          <Button onClick={exportToCSV} className="gap-2">
-            <Download className="h-4 w-4" />
-            Export CSV
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={handleGeneratePayroll} 
+              className="gap-2"
+              disabled={isGenerating || payrollRecords.length > 0}
+            >
+              {isGenerating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              Generate Payroll
+            </Button>
+            <Button onClick={exportToCSV} variant="outline" className="gap-2">
+              <Download className="h-4 w-4" />
+              Export CSV
+            </Button>
+          </div>
         </div>
 
         {/* Summary Cards */}
