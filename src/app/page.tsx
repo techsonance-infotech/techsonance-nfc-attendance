@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import BottomNav from "@/components/BottomNav";
 import { isNFCSupported, startNFCReader, stopNFCReader, formatNFCSerial } from "@/lib/nfc";
 import { authClient, useSession } from "@/lib/auth-client";
+import { InstallPWA } from "@/components/InstallPWA";
 
 interface Employee {
   id: number;
@@ -309,6 +310,9 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background pb-20">
       <div className="max-w-lg mx-auto p-4 space-y-4">
+        {/* PWA Install Banner */}
+        <InstallPWA />
+
         {/* Header with Auth Info */}
         <div className="pt-4 pb-2">
           <div className="flex items-center justify-between mb-2">
