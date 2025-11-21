@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { invoices } from '@/db/schema';
-import { lt, ne, and, asc } from 'drizzle-orm';
+import { eq, lt, ne, and, asc } from 'drizzle-orm';
 import { getCurrentUser } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
