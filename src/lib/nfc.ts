@@ -9,11 +9,38 @@ export interface NFCReadResult {
 }
 
 /**
+ * Detect device type
+ */
+export const getDeviceType = (): 'android' | 'ios' | 'other' => {
+  if (typeof window === 'undefined') return 'other';
+  
+  const userAgent = navigator.userAgent.toLowerCase();
+  
+  if (/android/.test(userAgent)) {
+    return 'android';
+  }
+  
+  if (/iphone|ipad|ipod/.test(userAgent)) {
+    return 'ios';
+  }
+  
+  return 'other';
+};
+
+/**
  * Check if NFC is supported in the current browser
  */
 export const isNFCSupported = (): boolean => {
   if (typeof window === 'undefined') return false;
   return 'NDEFReader' in window;
+};
+
+/**
+ * Check if camera is available for QR code scanning
+ */
+export const isCameraAvailable = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return 'mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices;
 };
 
 /**
