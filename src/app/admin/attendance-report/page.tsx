@@ -68,7 +68,7 @@ export default function AttendanceReportPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState("all");
   
   // Dialog states
   const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
@@ -142,7 +142,7 @@ export default function AttendanceReportPage() {
     }
 
     // Filter by month
-    if (selectedMonth) {
+    if (selectedMonth !== "all") {
       filtered = filtered.filter((r) => r.date.startsWith(selectedMonth));
     }
 
@@ -154,7 +154,7 @@ export default function AttendanceReportPage() {
     setSelectedStatus("all");
     setDateFrom("");
     setDateTo("");
-    setSelectedMonth("");
+    setSelectedMonth("all");
   };
 
   const openUpdateDialog = (record: AttendanceRecord) => {
