@@ -37,6 +37,7 @@ interface DashboardStats {
   todayAbsent: number;
   avgWorkHours: number;
   totalLeaves: number;
+  missingCheckouts: number;
 }
 
 export default function AdminDashboard() {
@@ -49,6 +50,7 @@ export default function AdminDashboard() {
     todayAbsent: 0,
     avgWorkHours: 0,
     totalLeaves: 0,
+    missingCheckouts: 0,
   });
   const [recentAttendance, setRecentAttendance] = useState<AttendanceRecord[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -75,36 +77,51 @@ export default function AdminDashboard() {
     setIsLoading(true);
     try {
       // Load employees
-      const empResponse = await fetch("/api/employees?limit=100");
+      const empResponse = await fetch("/api/employees?limit=1000");
       if (!empResponse.ok) throw new Error("Failed to load employees");
       const empData = await empResponse.json();
       setEmployees(empData);
 
-      // Load attendance records
-      const attResponse = await fetch("/api/attendance?limit=100");
-      if (!attResponse.ok) throw new Error("Failed to load attendance");
-      const attData = await attResponse.json();
-      setRecentAttendance(attData.slice(0, 10));
+      // Get today's date
+      const today = new Date().toISOString().split("T")[0];
+
+      // Load today's attendance records only
+      const todayAttResponse = await fetch(`/api/attendance?date=${today}&limit=1000`);
+      if (!todayAttResponse.ok) throw new Error("Failed to load today's attendance");
+      const todayAttData = await todayAttResponse.json();
+      setRecentAttendance(todayAttData);
+
+      // Load all attendance for average calculation
+      const allAttResponse = await fetch("/api/attendance?limit=1000");
+      if (!allAttResponse.ok) throw new Error("Failed to load attendance");
+      const allAttData = await allAttResponse.json();
 
       // Calculate stats
-      const today = new Date().toISOString().split("T")[0];
-      const todayRecords = attData.filter((r: AttendanceRecord) => r.date === today);
+      const presentToday = todayAttData.filter((r: AttendanceRecord) => r.status === "present").length;
+      const leavesToday = todayAttData.filter((r: AttendanceRecord) => r.status === "leave").length;
       
-      const presentToday = todayRecords.filter((r: AttendanceRecord) => r.status === "present").length;
-      const totalLeaves = attData.filter((r: AttendanceRecord) => r.status === "leave").length;
+      // Count records without checkout (timeOut is null and status is present)
+      const missingCheckouts = todayAttData.filter(
+        (r: AttendanceRecord) => r.status === "present" && r.timeOut === null
+      ).length;
       
-      const completedRecords = attData.filter((r: AttendanceRecord) => r.duration);
+      // Calculate average work hours from completed records (with duration)
+      const completedRecords = allAttData.filter((r: AttendanceRecord) => r.duration && r.duration > 0);
       const avgMinutes = completedRecords.length > 0
         ? completedRecords.reduce((sum: number, r: AttendanceRecord) => sum + (r.duration || 0), 0) / completedRecords.length
         : 0;
+      
+      // Count total leaves across all time
+      const totalLeaves = allAttData.filter((r: AttendanceRecord) => r.status === "leave").length;
       
       setStats({
         totalEmployees: empData.length,
         employeesWithNFC: empData.filter((e: Employee) => e.nfcCardId).length,
         todayPresent: presentToday,
-        todayAbsent: empData.length - presentToday,
+        todayAbsent: empData.length - presentToday - leavesToday,
         avgWorkHours: avgMinutes / 60,
         totalLeaves,
+        missingCheckouts,
       });
     } catch (error) {
       console.error("Error loading dashboard data:", error);
@@ -206,7 +223,7 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalLeaves}</div>
-              <p className="text-xs text-muted-foreground mt-1">Missing check-outs</p>
+              <p className="text-xs text-muted-foreground mt-1">{stats.missingCheckouts} missing check-outs today</p>
             </CardContent>
           </Card>
 
@@ -220,24 +237,31 @@ export default function AdminDashboard() {
               <div className="flex flex-wrap gap-2">
                 <Badge
                   variant="outline"
-                  className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
+                  className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
                   onClick={() => router.push("/admin/employees")}
                 >
                   Manage Employees
                 </Badge>
                 <Badge
                   variant="outline"
-                  className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
-                  onClick={() => router.push("/admin/payroll")}
+                  className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
+                  onClick={() => router.push("/admin/finance/payroll")}
                 >
                   View Payroll
                 </Badge>
                 <Badge
                   variant="outline"
-                  className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
+                  className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
                   onClick={() => router.push("/admin/manual-attendance")}
                 >
                   Manual Entry
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
+                  onClick={() => router.push("/admin/attendance-report")}
+                >
+                  Attendance Report
                 </Badge>
               </div>
             </CardContent>
@@ -248,11 +272,11 @@ export default function AdminDashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Recent Attendance</CardTitle>
-            <CardDescription>Latest check-ins and check-outs</CardDescription>
+            <CardDescription>Today's check-ins and check-outs</CardDescription>
           </CardHeader>
           <CardContent>
             {recentAttendance.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">No attendance records yet</p>
+              <p className="text-center text-muted-foreground py-8">No attendance records for today</p>
             ) : (
               <div className="space-y-3">
                 {recentAttendance.map((record) => (
@@ -263,7 +287,9 @@ export default function AdminDashboard() {
                     <div className="flex-1">
                       <p className="font-medium">{getEmployeeName(record.employeeId)}</p>
                       <p className="text-sm text-muted-foreground">
-                        {formatDate(record.date)} • {formatTime(record.timeIn)}
+                        {formatTime(record.timeIn)}
+                        {record.timeOut && ` - ${formatTime(record.timeOut)}`}
+                        {record.duration && ` (${(record.duration / 60).toFixed(1)}h)`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
