@@ -365,7 +365,7 @@ export default function AttendanceReportPage() {
                     <SelectValue placeholder="Select Month" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Months</SelectItem>
+                    <SelectItem value="all">All Months</SelectItem>
                     {getMonthOptions().map((month) => (
                       <SelectItem key={month.value} value={month.value}>
                         {month.label}
