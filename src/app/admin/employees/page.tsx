@@ -13,7 +13,8 @@ import { UserPlus, Edit, Trash2, CreditCard, Loader2, User, Mail, Briefcase, Sea
 import { toast } from "sonner";
 import AdminNav from "@/components/AdminNav";
 import { useSession } from "@/lib/auth-client";
-import { isNFCSupported, startNFCReader, stopNFCReader, formatNFCSerial } from "@/lib/nfc";
+import { formatNFCSerial } from "@/lib/nfc";
+import CardScanner from "@/components/CardScanner";
 
 interface Employee {
   id: number;
@@ -39,7 +40,6 @@ export default function AdminEmployeesPage() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isScanning, setIsScanning] = useState(false);
-  const [nfcController, setNfcController] = useState<AbortController | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -208,64 +208,31 @@ export default function AdminEmployeesPage() {
     setIsNFCDialogOpen(true);
   };
 
-  const startNFCScanning = async () => {
-    if (!isNFCSupported()) {
-      toast.error("NFC is not supported on this device. Please use an Android device with Chrome browser.");
-      return;
-    }
+  const handleCardDetected = async (cardId: string) => {
+    if (!selectedEmployee) return;
 
-    setIsScanning(true);
-    toast.info("Please tap your NFC card...");
+    try {
+      const response = await fetch(`/api/employees/${selectedEmployee.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nfc_card_id: cardId,
+        }),
+      });
 
-    const controller = await startNFCReader(
-      async (result) => {
-        console.log("NFC card read:", result);
-        toast.success(`Card detected: ${formatNFCSerial(result.serialNumber)}`);
-        
-        // Assign NFC card to employee
-        if (selectedEmployee) {
-          try {
-            const response = await fetch(`/api/employees/${selectedEmployee.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                nfc_card_id: result.serialNumber,
-              }),
-            });
-
-            if (!response.ok) {
-              const error = await response.json();
-              throw new Error(error.error || "Failed to assign NFC card");
-            }
-
-            toast.success("NFC card assigned successfully");
-            setIsNFCDialogOpen(false);
-            stopNFCReader(controller);
-            setIsScanning(false);
-            setNfcController(null);
-            loadEmployees();
-          } catch (error: any) {
-            console.error("Error assigning NFC card:", error);
-            toast.error(error.message || "Failed to assign NFC card");
-          }
-        }
-      },
-      (error) => {
-        console.error("NFC error:", error);
-        toast.error(error.message);
-        setIsScanning(false);
-        setNfcController(null);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to assign NFC card");
       }
-    );
 
-    setNfcController(controller);
-  };
-
-  const stopNFCScanning = () => {
-    stopNFCReader(nfcController);
-    setIsScanning(false);
-    setNfcController(null);
-    toast.info("NFC scanning stopped");
+      toast.success("NFC card assigned successfully");
+      setIsNFCDialogOpen(false);
+      setSelectedEmployee(null);
+      loadEmployees();
+    } catch (error: any) {
+      console.error("Error assigning NFC card:", error);
+      toast.error(error.message || "Failed to assign NFC card");
+    }
   };
 
   const removeNFCCard = async (employee: Employee) => {
@@ -564,54 +531,19 @@ export default function AdminEmployeesPage() {
       </AlertDialog>
 
       {/* NFC Assignment Dialog */}
-      <Dialog open={isNFCDialogOpen} onOpenChange={(open) => {
-        setIsNFCDialogOpen(open);
-        if (!open && isScanning) {
-          stopNFCScanning();
-        }
-      }}>
-        <DialogContent>
+      <Dialog open={isNFCDialogOpen} onOpenChange={setIsNFCDialogOpen}>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Assign NFC Card</DialogTitle>
+            <DialogTitle>Assign Card to Employee</DialogTitle>
             <DialogDescription>
-              Tap an NFC card to assign it to {selectedEmployee?.name}
+              Scan the NFC card or QR code to assign it to {selectedEmployee?.name}
             </DialogDescription>
           </DialogHeader>
-          <div className="py-6 text-center space-y-4">
-            {!isNFCSupported() ? (
-              <div className="text-muted-foreground">
-                <CreditCard className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <p>NFC is not supported on this device.</p>
-                <p className="text-sm mt-2">Please use an Android device with Chrome browser.</p>
-              </div>
-            ) : isScanning ? (
-              <>
-                <Loader2 className="h-12 w-12 mx-auto animate-spin text-primary" />
-                <p className="text-muted-foreground">Scanning for NFC card...</p>
-                <p className="text-sm text-muted-foreground">Please hold your card near the device</p>
-              </>
-            ) : (
-              <>
-                <CreditCard className="h-12 w-12 mx-auto text-muted-foreground" />
-                <p className="text-muted-foreground">Ready to scan NFC card</p>
-              </>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsNFCDialogOpen(false)}>
-              Cancel
-            </Button>
-            {isScanning ? (
-              <Button variant="destructive" onClick={stopNFCScanning}>
-                Stop Scanning
-              </Button>
-            ) : (
-              <Button onClick={startNFCScanning} disabled={!isNFCSupported()}>
-                <CreditCard className="mr-2 h-4 w-4" />
-                Start Scanning
-              </Button>
-            )}
-          </DialogFooter>
+          <CardScanner
+            onCardDetected={handleCardDetected}
+            onCancel={() => setIsNFCDialogOpen(false)}
+            employeeName={selectedEmployee?.name}
+          />
         </DialogContent>
       </Dialog>
     </div>
