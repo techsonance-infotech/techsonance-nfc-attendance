@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Users, LayoutDashboard, LogOut, Home, ClipboardEdit, Receipt, Wallet, BarChart3, IndianRupee } from "lucide-react";
+import { Users, LayoutDashboard, LogOut, Home, ClipboardEdit, Receipt, Wallet, BarChart3, IndianRupee, FileText } from "lucide-react";
 import { authClient, useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import {
@@ -32,6 +32,7 @@ export default function AdminNav() {
   const navItems = [
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
     { href: "/admin/employees", label: "Employees", icon: Users },
+    { href: "/admin/attendance-report", label: "Attendance Report", icon: FileText },
     { href: "/admin/manual-attendance", label: "Manual Entry", icon: ClipboardEdit },
   ];
 
