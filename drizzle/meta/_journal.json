@@ -57,6 +57,13 @@
       "when": 1763707802349,
       "tag": "0007_many_medusa",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1764833668693,
+      "tag": "0008_broken_diamondback",
+      "breakpoints": true
     }
   ]
 }

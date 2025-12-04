@@ -10,6 +10,21 @@ export const employees = sqliteTable('employees', {
   photoUrl: text('photo_url'),
   salary: real('salary'),
   hourlyRate: real('hourly_rate'),
+  status: text('status').notNull().default('active'),
+  enrollmentDate: text('enrollment_date'),
+  createdAt: text('created_at').notNull(),
+});
+
+// NFC Tags table
+export const nfcTags = sqliteTable('nfc_tags', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  tagUid: text('tag_uid').notNull().unique(),
+  employeeId: integer('employee_id').references(() => employees.id),
+  status: text('status').notNull(),
+  enrolledAt: text('enrolled_at').notNull(),
+  enrolledBy: text('enrolled_by').references(() => user.id),
+  lastUsedAt: text('last_used_at'),
+  readerId: text('reader_id'),
   createdAt: text('created_at').notNull(),
 });
 
@@ -25,7 +40,28 @@ export const attendanceRecords = sqliteTable('attendance_records', {
   duration: integer('duration'),
   status: text('status').notNull(),
   checkInMethod: text('check_in_method').notNull(),
+  readerId: text('reader_id'),
+  location: text('location'),
+  tagUid: text('tag_uid'),
+  idempotencyKey: text('idempotency_key').unique(),
+  syncedAt: text('synced_at'),
+  metadata: text('metadata'),
   createdAt: text('created_at').notNull(),
+});
+
+// Reader devices table
+export const readerDevices = sqliteTable('reader_devices', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  readerId: text('reader_id').notNull().unique(),
+  name: text('name').notNull(),
+  location: text('location').notNull(),
+  type: text('type').notNull(),
+  status: text('status').notNull(),
+  ipAddress: text('ip_address'),
+  lastHeartbeat: text('last_heartbeat'),
+  config: text('config'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
 });
 
 // Invoices table
