@@ -35,32 +35,25 @@ import CardScanner from "@/components/CardScanner";
 
 interface Employee {
   id: number;
-  employeeId: string;
-  fullName: string;
+  name: string;
   email: string;
   department: string;
-}
-
-interface NfcTag {
-  id: number;
-  tagUid: string;
-  status: string;
+  nfcCardId?: string;
 }
 
 interface Enrollment {
   id: number;
+  tagUid: string;
   employeeId: number;
-  tagId: number;
+  status: string;
   enrolledAt: string;
+  lastUsedAt?: string;
+  readerId?: string;
   employee: {
-    fullName: string;
-    employeeId: string;
-    department: string;
+    id: number;
+    name: string;
     email: string;
-  };
-  tag: {
-    tagUid: string;
-    status: string;
+    department: string;
   };
 }
 
@@ -90,7 +83,7 @@ export default function EnrollmentsPage() {
 
       if (!response.ok) throw new Error("Failed to fetch enrollments");
       const data = await response.json();
-      setEnrollments(data.enrollments || []);
+      setEnrollments(Array.isArray(data) ? data : []);
     } catch (error) {
       toast.error("Failed to load enrollments");
       console.error(error);
@@ -140,7 +133,7 @@ export default function EnrollmentsPage() {
     if (enrollDialogOpen && enrollments.length >= 0) {
       fetchEmployees();
     }
-  }, [enrollDialogOpen]);
+  }, [enrollDialogOpen, enrollments.length]);
 
   // Handle card detected from scanner
   const handleCardDetected = (cardId: string) => {
@@ -217,9 +210,9 @@ export default function EnrollmentsPage() {
   // Filter enrollments
   const filteredEnrollments = enrollments.filter(
     (enrollment) =>
-      enrollment.employee.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      enrollment.employee.employeeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      enrollment.tag.tagUid.toLowerCase().includes(searchTerm.toLowerCase())
+      enrollment.employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      enrollment.employee.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      enrollment.tagUid.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (loading) {
@@ -277,7 +270,7 @@ export default function EnrollmentsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {enrollments.filter(e => e.tag.status === "active").length}
+              {enrollments.filter(e => e.status === "active").length}
             </div>
             <p className="text-xs text-muted-foreground">Ready to use</p>
           </CardContent>
@@ -294,7 +287,7 @@ export default function EnrollmentsPage() {
           <div className="flex items-center gap-2 mb-4">
             <Search className="h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by name, employee ID, or tag UID..."
+              placeholder="Search by name, email, or tag UID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-sm"
@@ -305,8 +298,8 @@ export default function EnrollmentsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Employee ID</TableHead>
-                  <TableHead>Name</TableHead>
+                  <TableHead>Employee Name</TableHead>
+                  <TableHead>Email</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead>NFC Tag UID</TableHead>
                   <TableHead>Status</TableHead>
@@ -324,21 +317,19 @@ export default function EnrollmentsPage() {
                 ) : (
                   filteredEnrollments.map((enrollment) => (
                     <TableRow key={enrollment.id}>
-                      <TableCell className="font-mono">
-                        {enrollment.employee.employeeId}
-                      </TableCell>
                       <TableCell className="font-medium">
-                        {enrollment.employee.fullName}
+                        {enrollment.employee.name}
                       </TableCell>
-                      <TableCell>{enrollment.employee.department}</TableCell>
+                      <TableCell>{enrollment.employee.email}</TableCell>
+                      <TableCell>{enrollment.employee.department || "N/A"}</TableCell>
                       <TableCell className="font-mono text-sm">
-                        {enrollment.tag.tagUid}
+                        {enrollment.tagUid}
                       </TableCell>
                       <TableCell>
                         <Badge
-                          variant={enrollment.tag.status === "active" ? "default" : "secondary"}
+                          variant={enrollment.status === "active" ? "default" : "secondary"}
                         >
-                          {enrollment.tag.status}
+                          {enrollment.status}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -394,7 +385,7 @@ export default function EnrollmentsPage() {
                   ) : (
                     employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id.toString()}>
-                        {employee.fullName} ({employee.employeeId}) - {employee.department}
+                        {employee.name} - {employee.department || "No Department"}
                       </SelectItem>
                     ))
                   )}
@@ -432,7 +423,7 @@ export default function EnrollmentsPage() {
                   onCardDetected={handleCardDetected}
                   onCancel={() => setIsScanning(false)}
                   employeeName={
-                    employees.find(e => e.id.toString() === selectedEmployee)?.fullName
+                    employees.find(e => e.id.toString() === selectedEmployee)?.name
                   }
                 />
               </div>
