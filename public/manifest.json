@@ -1,8 +1,8 @@
 {
-  "name": "NFC Attendance Tracker",
-  "short_name": "Attendance",
-  "description": "Track employee attendance with NFC card scanning and geolocation-based check-in",
-  "start_url": "/",
+  "name": "NFC Attendance System",
+  "short_name": "NFC Attendance",
+  "description": "Enterprise NFC-based attendance management system with offline support",
+  "start_url": "/mobile",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#000000",
@@ -25,17 +25,17 @@
   "categories": ["business", "productivity"],
   "shortcuts": [
     {
-      "name": "Check In",
+      "name": "Mobile Check-in",
       "short_name": "Check In",
-      "description": "Quick check-in",
-      "url": "/",
+      "description": "NFC check-in/check-out",
+      "url": "/mobile",
       "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Attendance History",
-      "short_name": "History",
-      "description": "View attendance history",
-      "url": "/history",
+      "name": "Admin Dashboard",
+      "short_name": "Dashboard",
+      "description": "View admin dashboard",
+      "url": "/dashboard",
       "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
     }
   ]
