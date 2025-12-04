@@ -1,0 +1,24 @@
+{
+  "name": "nfc-reader-agent",
+  "version": "1.0.0",
+  "description": "NFC Reader Agent for USB/Ethernet NFC readers with offline buffering",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "SIMULATION_MODE=true node index.js",
+    "test": "SIMULATION_MODE=true node index.js"
+  },
+  "keywords": [
+    "nfc",
+    "attendance",
+    "reader",
+    "rfid"
+  ],
+  "author": "Your Organization",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
