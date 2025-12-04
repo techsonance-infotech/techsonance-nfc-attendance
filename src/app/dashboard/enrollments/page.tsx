@@ -31,6 +31,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Search, Scan, Trash2, UserPlus, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import CardScanner from "@/components/CardScanner";
 
 interface Employee {
   id: number;
@@ -75,6 +76,7 @@ export default function EnrollmentsPage() {
   const [scannedTagUid, setScannedTagUid] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
 
   // Fetch enrollments
   const fetchEnrollments = async () => {
@@ -99,6 +101,7 @@ export default function EnrollmentsPage() {
 
   // Fetch employees (not enrolled)
   const fetchEmployees = async () => {
+    setLoadingEmployees(true);
     try {
       const token = localStorage.getItem("bearer_token");
       const response = await fetch("/api/employees", {
@@ -112,13 +115,20 @@ export default function EnrollmentsPage() {
       
       // Filter out already enrolled employees
       const enrolledEmployeeIds = enrollments.map(e => e.employeeId);
-      const availableEmployees = data.employees.filter(
+      const availableEmployees = (data.employees || []).filter(
         (emp: Employee) => !enrolledEmployeeIds.includes(emp.id)
       );
       
       setEmployees(availableEmployees);
+      
+      if (availableEmployees.length === 0) {
+        toast.info("All employees are already enrolled");
+      }
     } catch (error) {
+      toast.error("Failed to load employees");
       console.error("Failed to load employees:", error);
+    } finally {
+      setLoadingEmployees(false);
     }
   };
 
@@ -127,26 +137,16 @@ export default function EnrollmentsPage() {
   }, []);
 
   useEffect(() => {
-    if (enrollDialogOpen) {
+    if (enrollDialogOpen && enrollments.length >= 0) {
       fetchEmployees();
     }
-  }, [enrollDialogOpen, enrollments]);
+  }, [enrollDialogOpen]);
 
-  // Mock NFC scanner simulation
-  const simulateNfcScan = () => {
-    setIsScanning(true);
-    
-    // Simulate scanning delay
-    setTimeout(() => {
-      // Generate random NFC UID
-      const randomUid = Array.from({ length: 8 }, () =>
-        Math.floor(Math.random() * 16).toString(16).toUpperCase()
-      ).join("");
-      
-      setScannedTagUid(randomUid);
-      setIsScanning(false);
-      toast.success("NFC Tag Scanned!");
-    }, 2500);
+  // Handle card detected from scanner
+  const handleCardDetected = (cardId: string) => {
+    setScannedTagUid(cardId);
+    setIsScanning(false);
+    toast.success("NFC card detected!");
   };
 
   // Handle enrollment
@@ -182,6 +182,7 @@ export default function EnrollmentsPage() {
       setEnrollDialogOpen(false);
       setSelectedEmployee("");
       setScannedTagUid("");
+      setIsScanning(false);
       fetchEnrollments();
     } catch (error: any) {
       toast.error(error.message || "Failed to enroll employee");
@@ -363,11 +364,11 @@ export default function EnrollmentsPage() {
 
       {/* Enrollment Dialog */}
       <Dialog open={enrollDialogOpen} onOpenChange={setEnrollDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Enroll Employee with NFC Tag</DialogTitle>
             <DialogDescription>
-              Scan an NFC tag and assign it to an employee for attendance tracking
+              Select an employee and scan their NFC card for attendance tracking
             </DialogDescription>
           </DialogHeader>
 
@@ -375,54 +376,67 @@ export default function EnrollmentsPage() {
             {/* Employee Selection */}
             <div className="space-y-2">
               <Label htmlFor="employee">Select Employee</Label>
-              <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
+              <Select 
+                value={selectedEmployee} 
+                onValueChange={setSelectedEmployee}
+                disabled={loadingEmployees}
+              >
                 <SelectTrigger id="employee">
-                  <SelectValue placeholder="Choose an employee" />
+                  <SelectValue placeholder={
+                    loadingEmployees ? "Loading employees..." : "Choose an employee"
+                  } />
                 </SelectTrigger>
                 <SelectContent>
-                  {employees.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.id.toString()}>
-                      {employee.fullName} ({employee.employeeId}) - {employee.department}
-                    </SelectItem>
-                  ))}
+                  {employees.length === 0 ? (
+                    <div className="p-2 text-sm text-muted-foreground text-center">
+                      {loadingEmployees ? "Loading..." : "No available employees"}
+                    </div>
+                  ) : (
+                    employees.map((employee) => (
+                      <SelectItem key={employee.id} value={employee.id.toString()}>
+                        {employee.fullName} ({employee.employeeId}) - {employee.department}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
 
             {/* NFC Scanner */}
-            <div className="space-y-2">
-              <Label>NFC Tag UID</Label>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Scan or enter NFC tag UID"
-                  value={scannedTagUid}
-                  onChange={(e) => setScannedTagUid(e.target.value.toUpperCase())}
-                  disabled={isScanning}
-                  className="font-mono"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={simulateNfcScan}
-                  disabled={isScanning}
-                >
-                  {isScanning ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Scanning...
-                    </>
-                  ) : (
-                    <>
-                      <Scan className="mr-2 h-4 w-4" />
-                      Scan
-                    </>
-                  )}
-                </Button>
+            {!isScanning ? (
+              <div className="space-y-2">
+                <Label>NFC Tag UID</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Scan or enter NFC tag UID"
+                    value={scannedTagUid}
+                    onChange={(e) => setScannedTagUid(e.target.value.toUpperCase())}
+                    className="font-mono"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsScanning(true)}
+                  >
+                    <Scan className="mr-2 h-4 w-4" />
+                    Scan
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Click "Scan" to use NFC reader or enter card UID manually
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Click "Scan" to simulate NFC tag reading (for testing)
-              </p>
-            </div>
+            ) : (
+              <div className="border rounded-lg p-4">
+                <CardScanner
+                  onCardDetected={handleCardDetected}
+                  onCancel={() => setIsScanning(false)}
+                  employeeName={
+                    employees.find(e => e.id.toString() === selectedEmployee)?.fullName
+                  }
+                />
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -432,11 +446,15 @@ export default function EnrollmentsPage() {
                 setEnrollDialogOpen(false);
                 setSelectedEmployee("");
                 setScannedTagUid("");
+                setIsScanning(false);
               }}
             >
               Cancel
             </Button>
-            <Button onClick={handleEnroll} disabled={enrolling || !selectedEmployee || !scannedTagUid}>
+            <Button 
+              onClick={handleEnroll} 
+              disabled={enrolling || !selectedEmployee || !scannedTagUid || isScanning}
+            >
               {enrolling ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
