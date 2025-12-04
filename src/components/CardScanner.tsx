@@ -6,9 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CreditCard, QrCode, Keyboard, Loader2, CheckCircle, AlertCircle, Smartphone } from "lucide-react";
+import { CreditCard, QrCode, Keyboard, Loader2, CheckCircle, AlertCircle, Smartphone, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { isValidNFCUID, formatNFCSerial, cleanNFCUID } from "@/lib/nfc";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface CardScannerProps {
   onCardDetected: (cardId: string) => void;
@@ -22,25 +29,79 @@ export default function CardScanner({ onCardDetected, onCancel, employeeName }: 
   const [manualCardId, setManualCardId] = useState("");
   const [scanStatus, setScanStatus] = useState<"idle" | "scanning" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [nfcPermissionState, setNfcPermissionState] = useState<"prompt" | "granted" | "denied" | "unsupported">("prompt");
+  const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const ndefReaderRef = useRef<any>(null);
 
   // Check for Web NFC API support
   const isNFCSupported = typeof window !== "undefined" && "NDEFReader" in window;
 
-  // Cleanup camera stream on unmount
+  // Check NFC permission on mount
+  useEffect(() => {
+    if (!isNFCSupported) {
+      setNfcPermissionState("unsupported");
+      return;
+    }
+
+    // Check if permissions API is available
+    if ("permissions" in navigator) {
+      // Note: NFC permission is not yet in permissions API, so we handle it differently
+      setNfcPermissionState("prompt");
+    }
+  }, [isNFCSupported]);
+
+  // Cleanup camera stream and NFC reader on unmount
   useEffect(() => {
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
+      if (ndefReaderRef.current) {
+        // Cleanup NFC reader if possible
+        ndefReaderRef.current = null;
+      }
     };
   }, []);
+
+  // Request NFC permission and start scanning
+  const requestNFCPermission = async () => {
+    if (!isNFCSupported) {
+      setShowPermissionDialog(true);
+      return false;
+    }
+
+    try {
+      // @ts-ignore - Web NFC API
+      const ndef = new NDEFReader();
+      
+      // Try to scan - this will trigger permission prompt
+      await ndef.scan();
+      
+      setNfcPermissionState("granted");
+      return true;
+    } catch (error: any) {
+      console.error("NFC permission error:", error);
+      
+      if (error.name === "NotAllowedError") {
+        setNfcPermissionState("denied");
+        setShowPermissionDialog(true);
+      } else if (error.name === "NotSupportedError") {
+        setNfcPermissionState("unsupported");
+        setShowPermissionDialog(true);
+      } else {
+        setNfcPermissionState("denied");
+      }
+      
+      return false;
+    }
+  };
 
   // NFC Scanning using Web NFC API
   const handleNFCScan = async () => {
     if (!isNFCSupported) {
-      toast.error("NFC is not supported on this device. Please use QR code or manual entry.");
+      setShowPermissionDialog(true);
       return;
     }
 
@@ -51,8 +112,11 @@ export default function CardScanner({ onCardDetected, onCancel, employeeName }: 
 
       // @ts-ignore - Web NFC API
       const ndef = new NDEFReader();
+      ndefReaderRef.current = ndef;
+      
       await ndef.scan();
-
+      
+      setNfcPermissionState("granted");
       toast.success("NFC scanner is ready. Please tap your card...");
 
       ndef.addEventListener("reading", ({ serialNumber }: any) => {
@@ -76,9 +140,13 @@ export default function CardScanner({ onCardDetected, onCancel, employeeName }: 
       setScanStatus("error");
       
       if (error.name === "NotAllowedError") {
-        setErrorMessage("NFC permission denied. Please enable NFC in your device settings.");
+        setErrorMessage("NFC permission denied. Please enable NFC in your browser settings.");
+        setNfcPermissionState("denied");
+        setShowPermissionDialog(true);
       } else if (error.name === "NotSupportedError") {
-        setErrorMessage("NFC is not supported on this device.");
+        setErrorMessage("NFC is not supported on this device or browser.");
+        setNfcPermissionState("unsupported");
+        setShowPermissionDialog(true);
       } else {
         setErrorMessage("Failed to start NFC scanner. Please try again.");
       }
@@ -91,6 +159,7 @@ export default function CardScanner({ onCardDetected, onCancel, employeeName }: 
     setIsScanning(false);
     setScanStatus("idle");
     setErrorMessage("");
+    ndefReaderRef.current = null;
   };
 
   // QR Code Scanning using device camera
@@ -111,13 +180,18 @@ export default function CardScanner({ onCardDetected, onCancel, employeeName }: 
         videoRef.current.play();
       }
 
-      // Note: For production, integrate a QR code scanning library like jsQR or html5-qrcode
       toast.info("QR scanning view opened. Point camera at QR code.");
 
     } catch (error: any) {
       console.error("Camera access error:", error);
       setScanStatus("error");
-      setErrorMessage("Failed to access camera. Please check permissions.");
+      
+      if (error.name === "NotAllowedError") {
+        setErrorMessage("Camera permission denied. Please enable camera access in your browser settings.");
+      } else {
+        setErrorMessage("Failed to access camera. Please check permissions.");
+      }
+      
       setIsScanning(false);
     }
   };
@@ -187,11 +261,20 @@ export default function CardScanner({ onCardDetected, onCancel, employeeName }: 
         {/* NFC Tab */}
         <TabsContent value="nfc" className="space-y-4">
           <div className="text-center space-y-4 py-6">
-            {!isNFCSupported && (
+            {nfcPermissionState === "unsupported" && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Web NFC is not supported on this device. Please use Chrome on Android or try QR code/manual entry.
+                  Web NFC is not supported on this device/browser. Please use Chrome on Android (version 89+) or try QR code/manual entry.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {nfcPermissionState === "denied" && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  NFC permission denied. Please enable NFC in your browser settings and try again.
                 </AlertDescription>
               </Alert>
             )}
@@ -202,6 +285,13 @@ export default function CardScanner({ onCardDetected, onCancel, employeeName }: 
                 <p className="text-muted-foreground">
                   Tap a card to scan using NFC
                 </p>
+                {nfcPermissionState === "prompt" && (
+                  <Alert>
+                    <AlertDescription className="text-xs">
+                      <strong>First time?</strong> You'll be asked to allow NFC access when you start scanning.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </>
             )}
 
@@ -210,6 +300,9 @@ export default function CardScanner({ onCardDetected, onCancel, employeeName }: 
                 <Loader2 className="h-16 w-16 mx-auto text-primary animate-spin" />
                 <p className="text-primary font-medium">
                   Ready to scan. Tap your NFC card...
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Hold the card near the back of your phone
                 </p>
               </>
             )}
@@ -234,7 +327,7 @@ export default function CardScanner({ onCardDetected, onCancel, employeeName }: 
 
             <div className="flex gap-2 justify-center">
               {!isScanning ? (
-                <Button onClick={handleNFCScan} disabled={!isNFCSupported}>
+                <Button onClick={handleNFCScan} disabled={nfcPermissionState === "unsupported"}>
                   <CreditCard className="mr-2 h-4 w-4" />
                   Start NFC Scan
                 </Button>
@@ -347,6 +440,76 @@ export default function CardScanner({ onCardDetected, onCancel, employeeName }: 
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Permission Help Dialog */}
+      <Dialog open={showPermissionDialog} onOpenChange={setShowPermissionDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              Enable NFC Access
+            </DialogTitle>
+            <DialogDescription>
+              Follow these steps to enable NFC on your device
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {nfcPermissionState === "unsupported" ? (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>NFC Not Supported</strong>
+                  <br />
+                  Web NFC is only available on:
+                  <ul className="list-disc list-inside mt-2 space-y-1">
+                    <li>Android devices with NFC hardware</li>
+                    <li>Chrome browser version 89 or newer</li>
+                    <li>HTTPS connection (secure context)</li>
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <>
+                <Alert>
+                  <AlertDescription>
+                    <strong>Step 1: Enable NFC on your device</strong>
+                    <ol className="list-decimal list-inside mt-2 space-y-1">
+                      <li>Open your phone's <strong>Settings</strong></li>
+                      <li>Go to <strong>Connected devices</strong> or <strong>Connections</strong></li>
+                      <li>Enable <strong>NFC</strong> toggle</li>
+                    </ol>
+                  </AlertDescription>
+                </Alert>
+
+                <Alert>
+                  <AlertDescription>
+                    <strong>Step 2: Grant browser permission</strong>
+                    <ol className="list-decimal list-inside mt-2 space-y-1">
+                      <li>Click "Start NFC Scan" button</li>
+                      <li>Allow NFC access when prompted</li>
+                      <li>Hold your card near the back of your phone</li>
+                    </ol>
+                  </AlertDescription>
+                </Alert>
+
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    <strong>Still not working?</strong> Try using the Manual Entry tab to enter the card ID directly.
+                  </AlertDescription>
+                </Alert>
+              </>
+            )}
+          </div>
+
+          <div className="flex gap-2 justify-end">
+            <Button onClick={() => setShowPermissionDialog(false)}>
+              Got it
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
