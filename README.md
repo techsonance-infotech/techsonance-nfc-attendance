@@ -1,36 +1,151 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NFC Attendance System
 
-## Getting Started
+A complete, production-grade NFC-based attendance management system for IT companies. Built with Next.js 15, TypeScript, and Turso database.
 
-First, run the development server:
+## 🎯 Features
+
+### Admin Dashboard
+- **Real-time Statistics**: Live attendance tracking with auto-refresh
+- **Employee Management**: Full CRUD operations for employee records
+- **NFC Enrollment**: Bind NFC tags to employees with simulation mode
+- **Attendance Reports**: Advanced filtering, pagination, and CSV export
+- **Reader Device Management**: Monitor and configure NFC readers
+- **Settings & Configuration**: Environment-based API endpoint management
+
+### Mobile PWA
+- **Progressive Web App**: Installable on mobile devices
+- **NFC Check-in/Check-out**: Web NFC API support for Android Chrome
+- **Offline Support**: Local buffering with automatic sync
+- **Service Worker**: Background sync and caching
+
+### Reader Agent
+- **USB/Ethernet Support**: Standalone Node.js agent for hardware readers
+- **Offline Buffering**: Automatic retry and sync when connection returns
+- **Health Monitoring**: Built-in HTTP endpoints for status checks
+- **Multiple Reader Support**: Run multiple agents for different locations
+
+### Security & Authentication
+- **Better Auth (JWT)**: Secure authentication with bearer tokens
+- **Role-Based Access Control (RBAC)**: Admin, HR, Reader, Employee roles
+- **Protected Routes**: Middleware-based route protection
+- **Session Management**: Persistent sessions with automatic refresh
+
+## 🚀 Quick Start
+
+### 1. Install Dependencies
 
 ```bash
-npm run dev
+bun install
 # or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Run Development Server
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+bun dev
+# or
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Visit [http://localhost:3000](http://localhost:3000)
 
-## Learn More
+### 3. Login
 
-To learn more about Next.js, take a look at the following resources:
+**Admin Account:**
+- Email: `admin@company.com`
+- Password: `password123`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Employee Account:**
+- Email: `john.doe@company.com`
+- Password: `password123`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 📱 Pages
 
-## Deploy on Vercel
+- `/` - Homepage with system info
+- `/login` - Authentication
+- `/register` - User registration
+- `/dashboard` - Admin dashboard (requires login)
+- `/dashboard/employees` - Employee management
+- `/dashboard/enrollments` - NFC tag enrollment
+- `/dashboard/attendance` - Attendance reports
+- `/dashboard/readers` - Reader device management
+- `/dashboard/settings` - System configuration
+- `/mobile` - Mobile PWA for check-in/check-out
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 🔌 API Endpoints
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Authentication
+- `POST /api/auth/[...all]` - Better Auth endpoints
+
+### Employees
+- `GET /api/employees` - List employees
+- `POST /api/employees` - Create employee
+- `PUT /api/employees/[id]` - Update employee
+- `DELETE /api/employees/[id]` - Delete employee
+
+### Enrollments
+- `GET /api/enrollments` - List enrollments
+- `POST /api/enrollments` - Create enrollment
+- `DELETE /api/enrollments/[id]` - Remove enrollment
+
+### Attendance
+- `POST /api/attendance/checkin` - Check in
+- `POST /api/attendance/checkout` - Check out
+- `GET /api/attendance` - List attendance (with filters)
+- `GET /api/attendance/today` - Today's attendance
+- `POST /api/attendance/manual` - Manual entry
+
+### Readers
+- `GET /api/readers` - List readers
+- `POST /api/readers` - Create reader
+- `PUT /api/readers/[id]` - Update reader
+
+## 🤖 Reader Agent
+
+For USB/Ethernet NFC readers:
+
+```bash
+cd reader-agent
+npm install
+cp .env.example .env
+npm start
+```
+
+See `reader-agent/README.md` for details.
+
+## 🗄️ Database
+
+Pre-seeded with:
+- 20 employees across 5 departments
+- 18 active NFC tags
+- 3 reader devices
+- ~490 attendance records (30 days)
+
+Access Database Studio via the UI tab at the top right.
+
+## 📦 Tech Stack
+
+- **Framework**: Next.js 15 (App Router)
+- **Language**: TypeScript
+- **Database**: Turso (SQLite)
+- **ORM**: Drizzle
+- **Auth**: Better Auth (JWT)
+- **UI**: shadcn/ui + Tailwind CSS
+- **Icons**: Lucide React
+
+## ✨ Key Features
+
+✅ Complete Admin Dashboard
+✅ Mobile PWA with offline support
+✅ Reader Agent for hardware integration
+✅ Authentication & RBAC
+✅ Real-time updates (auto-refresh)
+✅ Offline-first architecture
+✅ CSV export
+✅ Health monitoring
+✅ Pre-loaded demo data
+
+---
+
+**Built with ❤️ using Next.js 15, TypeScript, Turso, and Better Auth**
