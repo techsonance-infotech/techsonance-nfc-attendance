@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Shield, LogIn, Clock, Users, FileText } from "lucide-react";
+import { Shield, LogIn, Clock, Users, FileText, User } from "lucide-react";
 import { useSession } from "@/lib/auth-client";
 
 export default function Home() {
@@ -20,18 +20,29 @@ export default function Home() {
             <div className="flex gap-2">
               {session?.user ? (
                 <>
-                  {(session.user as any).role === "admin" && (
+                  {(session.user as any).role === "admin" ? (
                     <Button onClick={() => router.push("/dashboard")}>
                       <Shield className="mr-2 h-4 w-4" />
                       Dashboard
                     </Button>
+                  ) : (
+                    <Button onClick={() => router.push("/employee/attendance")}>
+                      <User className="mr-2 h-4 w-4" />
+                      My Attendance
+                    </Button>
                   )}
                 </>
               ) : (
-                <Button onClick={() => router.push("/login")}>
-                  <LogIn className="mr-2 h-4 w-4" />
-                  Admin Login
-                    </Button>
+                <>
+                  <Button variant="outline" onClick={() => router.push("/login")}>
+                    <User className="mr-2 h-4 w-4" />
+                    Employee Login
+                  </Button>
+                  <Button onClick={() => router.push("/login")}>
+                    <Shield className="mr-2 h-4 w-4" />
+                    Admin Login
+                  </Button>
+                </>
               )}
             </div>
           )}

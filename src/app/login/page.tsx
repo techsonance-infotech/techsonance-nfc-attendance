@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,8 @@ import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get("redirect");
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
@@ -52,11 +54,13 @@ export default function LoginPage() {
 
       toast.success(`Welcome back! Logged in as ${userRole}`);
 
-      // Redirect based on role
-      if (userRole === "admin") {
-        router.push("/admin");
+      // Redirect based on role or redirect param
+      if (redirect && redirect !== "/login") {
+        router.push(redirect);
+      } else if (userRole === "admin") {
+        router.push("/dashboard");
       } else {
-        router.push("/");
+        router.push("/employee/attendance");
       }
     } catch (error: any) {
       console.error("Login error:", error);
@@ -137,6 +141,10 @@ export default function LoginPage() {
               )}
             </Button>
           </form>
+
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            <p>Sign in with your employee or admin credentials</p>
+          </div>
         </CardContent>
       </Card>
     </div>
