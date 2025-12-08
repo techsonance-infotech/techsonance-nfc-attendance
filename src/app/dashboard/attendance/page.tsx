@@ -51,24 +51,28 @@ import { cn } from "@/lib/utils";
 interface AttendanceRecord {
   id: number;
   employeeId: number;
-  checkIn: string;
-  checkOut: string | null;
+  date: string;
+  timeIn: string;
+  timeOut: string | null;
   status: string;
-  readerIdIn: string | null;
-  readerIdOut: string | null;
-  locationIn: string | null;
-  locationOut: string | null;
+  readerId: string | null;
+  location: string | null;
+  tagUid: string | null;
+  duration: number | null;
+  checkInMethod: string;
   employee: {
-    fullName: string;
-    employeeId: string;
+    name: string;
+    email: string;
     department: string;
+    photoUrl?: string | null;
   };
 }
 
 interface Employee {
   id: number;
   employeeId: string;
-  fullName: string;
+  name: string;
+  email: string;
   department: string;
 }
 
@@ -114,16 +118,19 @@ export default function AttendancePage() {
       const params = new URLSearchParams();
 
       if (dateFrom) {
-        params.append("startDate", format(dateFrom, "yyyy-MM-dd"));
+        params.append("start_date", format(dateFrom, "yyyy-MM-dd"));
       }
       if (dateTo) {
-        params.append("endDate", format(dateTo, "yyyy-MM-dd"));
+        params.append("end_date", format(dateTo, "yyyy-MM-dd"));
       }
       if (selectedDepartment && selectedDepartment !== "all") {
         params.append("department", selectedDepartment);
       }
       if (selectedReader && selectedReader !== "all") {
-        params.append("readerId", selectedReader);
+        params.append("reader_id", selectedReader);
+      }
+      if (selectedStatus && selectedStatus !== "all") {
+        params.append("status", selectedStatus);
       }
 
       const response = await fetch(`/api/attendance?${params}`, {
@@ -134,7 +141,10 @@ export default function AttendancePage() {
 
       if (!response.ok) throw new Error("Failed to fetch attendance");
       const data = await response.json();
-      setRecords(data.records || []);
+      
+      // Handle both array response and object with records property
+      const recordsArray = Array.isArray(data) ? data : (data.records || []);
+      setRecords(recordsArray);
       setLastSync(new Date());
     } catch (error) {
       toast.error("Failed to load attendance records");
@@ -156,9 +166,13 @@ export default function AttendancePage() {
 
       if (!response.ok) throw new Error("Failed to fetch employees");
       const data = await response.json();
-      setEmployees(data.employees || []);
+      
+      // Handle both array and object response
+      const employeesArray = Array.isArray(data) ? data : (data.employees || []);
+      setEmployees(employeesArray);
     } catch (error) {
       console.error("Failed to load employees:", error);
+      toast.error("Failed to load employees");
     }
   };
 
@@ -174,7 +188,10 @@ export default function AttendancePage() {
 
       if (!response.ok) throw new Error("Failed to fetch readers");
       const data = await response.json();
-      setReaders(data.readers || []);
+      
+      // Handle both array and object response
+      const readersArray = Array.isArray(data) ? data : (data.readers || []);
+      setReaders(readersArray);
     } catch (error) {
       console.error("Failed to load readers:", error);
     }
@@ -191,13 +208,13 @@ export default function AttendancePage() {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [dateFrom, dateTo, selectedDepartment, selectedReader]);
+  }, [dateFrom, dateTo, selectedDepartment, selectedReader, selectedStatus]);
 
   // Filter and search records
   const filteredRecords = records.filter((record) => {
     const matchesSearch =
-      record.employee.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.employee.employeeId.toLowerCase().includes(searchTerm.toLowerCase());
+      record.employee?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.employee?.email?.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus =
       selectedStatus === "all" || record.status.toLowerCase() === selectedStatus.toLowerCase();
@@ -214,29 +231,31 @@ export default function AttendancePage() {
   // Export to CSV
   const exportToCSV = () => {
     const headers = [
-      "Employee ID",
-      "Name",
+      "Date",
+      "Employee Name",
+      "Email",
       "Department",
       "Check In",
       "Check Out",
+      "Duration (min)",
       "Status",
-      "Location In",
-      "Location Out",
-      "Reader In",
-      "Reader Out",
+      "Location",
+      "Reader ID",
+      "Check-in Method",
     ];
 
     const rows = filteredRecords.map((record) => [
-      record.employee.employeeId,
-      record.employee.fullName,
-      record.employee.department,
-      format(new Date(record.checkIn), "yyyy-MM-dd HH:mm:ss"),
-      record.checkOut ? format(new Date(record.checkOut), "yyyy-MM-dd HH:mm:ss") : "—",
+      record.date,
+      record.employee?.name || "N/A",
+      record.employee?.email || "N/A",
+      record.employee?.department || "N/A",
+      format(new Date(record.timeIn), "yyyy-MM-dd HH:mm:ss"),
+      record.timeOut ? format(new Date(record.timeOut), "yyyy-MM-dd HH:mm:ss") : "—",
+      record.duration?.toString() || "—",
       record.status,
-      record.locationIn || "—",
-      record.locationOut || "—",
-      record.readerIdIn || "—",
-      record.readerIdOut || "—",
+      record.location || "—",
+      record.readerId || "—",
+      record.checkInMethod || "manual",
     ]);
 
     const csvContent = [headers, ...rows].map((row) => row.join(",")).join("\n");
@@ -294,7 +313,7 @@ export default function AttendancePage() {
   };
 
   // Get unique departments
-  const departments = Array.from(new Set(employees.map((e) => e.department))).sort();
+  const departments = Array.from(new Set(employees.map((e) => e.department).filter(Boolean))).sort();
 
   // Status badge variant
   const getStatusVariant = (status: string) => {
@@ -386,7 +405,7 @@ export default function AttendancePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {filteredRecords.filter((r) => r.checkOut !== null).length}
+              {filteredRecords.filter((r) => r.timeOut !== null).length}
             </div>
             <p className="text-xs text-muted-foreground">Completed records</p>
           </CardContent>
@@ -412,7 +431,7 @@ export default function AttendancePage() {
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Name or ID..."
+                  placeholder="Name or email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-8"
@@ -552,14 +571,14 @@ export default function AttendancePage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Employee ID</TableHead>
-                  <TableHead>Name</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Employee</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead>Check In</TableHead>
                   <TableHead>Check Out</TableHead>
+                  <TableHead>Duration</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Reader</TableHead>
+                  <TableHead>Method</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -572,27 +591,38 @@ export default function AttendancePage() {
                 ) : (
                   currentRecords.map((record) => (
                     <TableRow key={record.id}>
-                      <TableCell className="font-mono">{record.employee.employeeId}</TableCell>
-                      <TableCell className="font-medium">{record.employee.fullName}</TableCell>
-                      <TableCell>{record.employee.department}</TableCell>
-                      <TableCell className="text-sm">
-                        {format(new Date(record.checkIn), "MMM dd, yyyy HH:mm")}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {record.checkOut
-                          ? format(new Date(record.checkOut), "MMM dd, yyyy HH:mm")
-                          : "—"}
+                      <TableCell className="font-medium">
+                        {format(new Date(record.date), "MMM dd, yyyy")}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={getStatusVariant(record.status)}>{record.status}</Badge>
+                        <div>
+                          <div className="font-medium">{record.employee?.name || "N/A"}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {record.employee?.email || ""}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>{record.employee?.department || "N/A"}</TableCell>
+                      <TableCell className="text-sm">
+                        {format(new Date(record.timeIn), "HH:mm:ss")}
                       </TableCell>
                       <TableCell className="text-sm">
-                        {record.locationIn || "—"}
-                        {record.checkOut && record.locationOut && ` → ${record.locationOut}`}
+                        {record.timeOut
+                          ? format(new Date(record.timeOut), "HH:mm:ss")
+                          : "—"}
                       </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {record.readerIdIn || "—"}
-                        {record.checkOut && record.readerIdOut && ` → ${record.readerIdOut}`}
+                      <TableCell className="text-sm">
+                        {record.duration ? `${record.duration} min` : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusVariant(record.status)}>
+                          {record.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <Badge variant="outline">
+                          {record.checkInMethod === "nfc" ? "NFC" : "Manual"}
+                        </Badge>
                       </TableCell>
                     </TableRow>
                   ))
@@ -658,7 +688,7 @@ export default function AttendancePage() {
                 <SelectContent>
                   {employees.map((employee) => (
                     <SelectItem key={employee.id} value={employee.id.toString()}>
-                      {employee.fullName} ({employee.employeeId})
+                      {employee.name} ({employee.employeeId})
                     </SelectItem>
                   ))}
                 </SelectContent>
