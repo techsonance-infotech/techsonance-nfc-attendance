@@ -32,10 +32,12 @@ import {
   WifiOff, 
   Activity,
   MapPin,
-  Clock
+  Clock,
+  Info
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Reader {
   id: number;
@@ -224,7 +226,7 @@ export default function ReadersPage() {
         <div>
           <h1 className="text-3xl font-bold">Reader Devices</h1>
           <p className="text-muted-foreground mt-1">
-            Manage and monitor NFC reader devices
+            Manage NFC reader device for attendance tracking
           </p>
         </div>
         <Button onClick={handleNew}>
@@ -232,6 +234,18 @@ export default function ReadersPage() {
           Add Reader
         </Button>
       </div>
+
+      {/* Info Alert */}
+      <Alert>
+        <Info className="h-4 w-4" />
+        <AlertDescription>
+          <strong>Single Reader Mode:</strong> Your NFC reader automatically handles both Time In and Time Out. When an employee taps their card, the system checks their current status:
+          <ul className="list-disc list-inside mt-2 ml-2 space-y-1">
+            <li>If not checked in today → Records <strong>Time In</strong></li>
+            <li>If already checked in → Records <strong>Time Out</strong> and calculates duration</li>
+          </ul>
+        </AlertDescription>
+      </Alert>
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -290,7 +304,9 @@ export default function ReadersPage() {
       <Card>
         <CardHeader>
           <CardTitle>Reader Devices</CardTitle>
-          <CardDescription>Configure NFC readers for attendance tracking</CardDescription>
+          <CardDescription>
+            Configure NFC readers for automatic Time In/Time Out tracking
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-2 mb-4">
@@ -371,7 +387,7 @@ export default function ReadersPage() {
               {editingReader ? "Edit Reader Device" : "Add Reader Device"}
             </DialogTitle>
             <DialogDescription>
-              Configure NFC reader device for attendance tracking
+              Configure NFC reader for automatic Time In/Time Out tracking
             </DialogDescription>
           </DialogHeader>
 
@@ -381,7 +397,7 @@ export default function ReadersPage() {
               <Label htmlFor="reader-id">Reader ID *</Label>
               <Input
                 id="reader-id"
-                placeholder="e.g., MAIN_GATE, FLOOR_2_ENTRANCE"
+                placeholder="e.g., MAIN_ENTRANCE, OFFICE_GATE"
                 value={formData.readerId}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, readerId: e.target.value.toUpperCase() }))
@@ -398,7 +414,7 @@ export default function ReadersPage() {
               <Label htmlFor="location">Location *</Label>
               <Input
                 id="location"
-                placeholder="e.g., Main Entrance, Building A - Floor 2"
+                placeholder="e.g., Main Entrance, Building A"
                 value={formData.location}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, location: e.target.value }))
@@ -411,7 +427,7 @@ export default function ReadersPage() {
               <Label htmlFor="description">Description</Label>
               <Textarea
                 id="description"
-                placeholder="Additional notes about this reader..."
+                placeholder="This reader handles both check-in and check-out automatically..."
                 value={formData.description}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, description: e.target.value }))
