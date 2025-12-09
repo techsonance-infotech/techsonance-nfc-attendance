@@ -21,8 +21,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { 
   Search, 
   Plus, 
@@ -42,12 +48,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 interface Reader {
   id: number;
   readerId: string;
+  name: string;
   location: string;
-  description: string | null;
+  type: string;
   status: string;
   lastHeartbeat: string | null;
   ipAddress: string | null;
-  firmwareVersion: string | null;
+  config: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -62,10 +69,10 @@ export default function ReadersPage() {
   const [editingReader, setEditingReader] = useState<Reader | null>(null);
   const [formData, setFormData] = useState({
     readerId: "",
+    name: "",
     location: "",
-    description: "",
+    type: "ethernet",
     ipAddress: "",
-    firmwareVersion: "",
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -81,7 +88,7 @@ export default function ReadersPage() {
 
       if (!response.ok) throw new Error("Failed to fetch readers");
       const data = await response.json();
-      setReaders(data.readers || []);
+      setReaders(data || []);
     } catch (error) {
       toast.error("Failed to load readers");
       console.error(error);
@@ -106,10 +113,10 @@ export default function ReadersPage() {
     setEditingReader(null);
     setFormData({
       readerId: "",
+      name: "",
       location: "",
-      description: "",
+      type: "ethernet",
       ipAddress: "",
-      firmwareVersion: "",
     });
     setDialogOpen(true);
   };
@@ -119,18 +126,18 @@ export default function ReadersPage() {
     setEditingReader(reader);
     setFormData({
       readerId: reader.readerId,
+      name: reader.name,
       location: reader.location,
-      description: reader.description || "",
+      type: reader.type,
       ipAddress: reader.ipAddress || "",
-      firmwareVersion: reader.firmwareVersion || "",
     });
     setDialogOpen(true);
   };
 
   // Handle submit (create or update)
   const handleSubmit = async () => {
-    if (!formData.readerId || !formData.location) {
-      toast.error("Reader ID and location are required");
+    if (!formData.readerId || !formData.name || !formData.location || !formData.type) {
+      toast.error("Reader ID, Name, Location, and Type are required");
       return;
     }
 
@@ -149,10 +156,10 @@ export default function ReadersPage() {
         },
         body: JSON.stringify({
           readerId: formData.readerId,
+          name: formData.name,
           location: formData.location,
-          description: formData.description || null,
+          type: formData.type,
           ipAddress: formData.ipAddress || null,
-          firmwareVersion: formData.firmwareVersion || null,
         }),
       });
 
@@ -176,6 +183,7 @@ export default function ReadersPage() {
   const filteredReaders = readers.filter(
     (reader) =>
       reader.readerId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      reader.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       reader.location.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -199,7 +207,7 @@ export default function ReadersPage() {
       return (
         <Badge variant="outline" className="gap-1">
           <Clock className="h-3 w-3" />
-          Idle
+          Maintenance
         </Badge>
       );
     }
@@ -209,6 +217,17 @@ export default function ReadersPage() {
   const getLastSeen = (reader: Reader) => {
     if (!reader.lastHeartbeat) return "Never";
     return formatDistanceToNow(new Date(reader.lastHeartbeat), { addSuffix: true });
+  };
+
+  // Get type badge
+  const getTypeBadge = (type: string) => {
+    const typeMap: Record<string, { label: string; variant: "default" | "secondary" | "outline" }> = {
+      ethernet: { label: "Ethernet", variant: "default" },
+      usb: { label: "USB", variant: "secondary" },
+      mobile: { label: "Mobile", variant: "outline" },
+    };
+    const config = typeMap[type] || { label: type, variant: "outline" };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
   if (loading) {
@@ -226,7 +245,7 @@ export default function ReadersPage() {
         <div>
           <h1 className="text-3xl font-bold">Reader Devices</h1>
           <p className="text-muted-foreground mt-1">
-            Manage NFC reader device for attendance tracking
+            Manage NFC reader devices for attendance tracking
           </p>
         </div>
         <Button onClick={handleNew}>
@@ -312,7 +331,7 @@ export default function ReadersPage() {
           <div className="flex items-center gap-2 mb-4">
             <Search className="h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by reader ID or location..."
+              placeholder="Search by reader ID, name, or location..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-sm"
@@ -324,18 +343,19 @@ export default function ReadersPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Reader ID</TableHead>
+                  <TableHead>Name</TableHead>
                   <TableHead>Location</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last Heartbeat</TableHead>
                   <TableHead>IP Address</TableHead>
-                  <TableHead>Firmware</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredReaders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       No readers found
                     </TableCell>
                   </TableRow>
@@ -345,21 +365,22 @@ export default function ReadersPage() {
                       <TableCell className="font-mono font-medium">
                         {reader.readerId}
                       </TableCell>
+                      <TableCell className="font-medium">
+                        {reader.name}
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <MapPin className="h-4 w-4 text-muted-foreground" />
                           {reader.location}
                         </div>
                       </TableCell>
+                      <TableCell>{getTypeBadge(reader.type)}</TableCell>
                       <TableCell>{getStatusBadge(reader)}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {getLastSeen(reader)}
                       </TableCell>
                       <TableCell className="font-mono text-sm">
                         {reader.ipAddress || "—"}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {reader.firmwareVersion || "—"}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -409,6 +430,22 @@ export default function ReadersPage() {
               </p>
             </div>
 
+            {/* Name */}
+            <div className="space-y-2">
+              <Label htmlFor="name">Name *</Label>
+              <Input
+                id="name"
+                placeholder="e.g., Main Entrance Reader"
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, name: e.target.value }))
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Friendly name for the reader device
+              </p>
+            </div>
+
             {/* Location */}
             <div className="space-y-2">
               <Label htmlFor="location">Location *</Label>
@@ -422,18 +459,27 @@ export default function ReadersPage() {
               />
             </div>
 
-            {/* Description */}
+            {/* Type */}
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                placeholder="This reader handles both check-in and check-out automatically..."
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, description: e.target.value }))
+              <Label htmlFor="type">Type *</Label>
+              <Select
+                value={formData.type}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, type: value }))
                 }
-                rows={3}
-              />
+              >
+                <SelectTrigger id="type">
+                  <SelectValue placeholder="Select reader type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ethernet">Ethernet (Wired Network)</SelectItem>
+                  <SelectItem value="usb">USB (Direct Connection)</SelectItem>
+                  <SelectItem value="mobile">Mobile (Android Device)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Connection type for the NFC reader
+              </p>
             </div>
 
             {/* IP Address */}
@@ -447,19 +493,9 @@ export default function ReadersPage() {
                   setFormData((prev) => ({ ...prev, ipAddress: e.target.value }))
                 }
               />
-            </div>
-
-            {/* Firmware Version */}
-            <div className="space-y-2">
-              <Label htmlFor="firmware">Firmware Version</Label>
-              <Input
-                id="firmware"
-                placeholder="e.g., v1.2.3"
-                value={formData.firmwareVersion}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, firmwareVersion: e.target.value }))
-                }
-              />
+              <p className="text-xs text-muted-foreground">
+                Network IP address (for ethernet readers)
+              </p>
             </div>
           </div>
 
