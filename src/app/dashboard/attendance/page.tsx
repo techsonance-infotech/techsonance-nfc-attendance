@@ -47,6 +47,7 @@ import {
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import NFCAttendanceToggle from "@/components/NFCAttendanceToggle";
 
 interface AttendanceRecord {
   id: number;
@@ -342,9 +343,9 @@ export default function AttendancePage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Attendance Reports</h1>
+          <h1 className="text-3xl font-bold">Attendance Tracking</h1>
           <p className="text-muted-foreground mt-1">
-            View, filter, and export attendance records
+            Single NFC reader for Time In and Time Out
           </p>
         </div>
         <div className="flex gap-2">
@@ -358,6 +359,15 @@ export default function AttendancePage() {
           </Button>
         </div>
       </div>
+
+      {/* NFC Attendance Toggle */}
+      <NFCAttendanceToggle 
+        readerId={readers[0]?.readerId || "MAIN_READER"}
+        location={readers[0]?.location || "Main Entrance"}
+        onSuccess={() => {
+          fetchAttendance();
+        }}
+      />
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
