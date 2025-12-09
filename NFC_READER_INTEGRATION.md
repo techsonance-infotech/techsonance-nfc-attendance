@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document provides complete integration instructions for NFC reader hardware to connect with the NFC Attendance System. The system supports automatic check-in/check-out when employees tap their NFC cards on registered readers.
+This document provides complete integration instructions for NFC reader hardware to connect with the NFC Attendance System. The system uses **a single NFC reader** that automatically handles both check-in and check-out when employees tap their NFC cards.
 
 ---
 
@@ -10,9 +10,14 @@ This document provides complete integration instructions for NFC reader hardware
 
 ```
 ┌─────────────┐      HTTP POST      ┌──────────────────┐      Database      ┌──────────┐
-│ NFC Reader  │ ──────────────────> │  API Endpoints   │ ────────────────> │ Database │
-│  Hardware   │  <──────────────── │  (Next.js API)   │ <──────────────── │ (Turso)  │
+│ NFC Reader  │ ──────────────────> │  Toggle API      │ ────────────────> │ Database │
+│  (Single)   │  <──────────────── │  (Auto Detect)   │ <──────────────── │ (Turso)  │
 └─────────────┘      Response       └──────────────────┘      Query        └──────────┘
+
+Logic Flow:
+Employee Taps Card → Check Status → Has Active Check-In Today?
+                                    ├─ NO  → Record Time In
+                                    └─ YES → Record Time Out + Calculate Duration
 ```
 
 ---
@@ -33,9 +38,131 @@ Authorization: Bearer YOUR_AUTH_TOKEN
 
 ---
 
-## 1. Check-In API
+## 1. Toggle Attendance API (Recommended)
+
+**This is the primary endpoint for single-reader implementations.**
 
 ### Endpoint
+```
+POST /api/attendance/toggle
+```
+
+### Headers
+```http
+Content-Type: application/json
+Authorization: Bearer YOUR_AUTH_TOKEN
+```
+
+### Request Body
+```json
+{
+  "tagUid": "NFC-001-A7K9M2X5",           // Required: NFC tag UID
+  "readerId": "READER-001",                // Optional: Reader device ID
+  "location": "Main Entrance",             // Optional: Physical location
+  "idempotencyKey": "unique-key-123",     // Optional: For preventing duplicates
+  "locationLatitude": -6.2088,            // Optional: GPS latitude
+  "locationLongitude": 106.8456,          // Optional: GPS longitude
+  "metadata": {                           // Optional: Additional data
+    "readerVersion": "1.0.0",
+    "firmwareVersion": "2.1.0"
+  }
+}
+```
+
+### Success Response - Check-In (201 Created)
+```json
+{
+  "action": "checkin",
+  "id": 14,
+  "employeeId": 1,
+  "date": "2025-12-08",
+  "timeIn": "2025-12-08T07:48:38.057Z",
+  "timeOut": null,
+  "duration": null,
+  "status": "present",
+  "checkInMethod": "nfc",
+  "readerId": "READER-001",
+  "location": "Main Entrance",
+  "tagUid": "NFC-001-A7K9M2X5",
+  "employee": {
+    "id": 1,
+    "name": "Sarah Johnson",
+    "email": "sarah.johnson@company.com",
+    "department": "Engineering",
+    "photoUrl": "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah"
+  },
+  "message": "Check-in successful"
+}
+```
+
+### Success Response - Check-Out (200 OK)
+```json
+{
+  "action": "checkout",
+  "id": 14,
+  "employeeId": 1,
+  "date": "2025-12-08",
+  "timeIn": "2025-12-08T07:48:38.057Z",
+  "timeOut": "2025-12-08T17:30:45.027Z",
+  "duration": 582,                     // Duration in minutes (9.7 hours)
+  "status": "present",
+  "checkInMethod": "nfc",
+  "readerId": "READER-001",
+  "location": "Main Entrance",
+  "tagUid": "NFC-001-A7K9M2X5",
+  "employee": {
+    "id": 1,
+    "name": "Sarah Johnson",
+    "email": "sarah.johnson@company.com",
+    "department": "Engineering",
+    "photoUrl": "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah"
+  },
+  "message": "Check-out successful. Duration: 582 minutes"
+}
+```
+
+### Error Responses
+
+**400 Bad Request - Tag Not Found**
+```json
+{
+  "error": "NFC tag not found",
+  "code": "TAG_NOT_FOUND"
+}
+```
+
+**400 Bad Request - Tag Inactive**
+```json
+{
+  "error": "NFC tag is not active",
+  "code": "TAG_INACTIVE"
+}
+```
+
+**400 Bad Request - Tag Not Assigned**
+```json
+{
+  "error": "NFC tag is not assigned to any employee",
+  "code": "TAG_NOT_ASSIGNED"
+}
+```
+
+**401 Unauthorized**
+```json
+{
+  "error": "Authentication required"
+}
+```
+
+---
+
+## 2. Legacy Endpoints (Backward Compatibility)
+
+These endpoints are maintained for backward compatibility but are not recommended for new implementations.
+
+### Check-In API (Legacy)
+
+#### Endpoint
 ```
 POST /api/attendance/checkin
 ```
@@ -136,9 +263,9 @@ Authorization: Bearer YOUR_AUTH_TOKEN
 
 ---
 
-## 2. Check-Out API
+## 3. Check-Out API (Legacy)
 
-### Endpoint
+#### Endpoint
 ```
 POST /api/attendance/checkout
 ```
@@ -193,7 +320,7 @@ Authorization: Bearer YOUR_AUTH_TOKEN
 
 ---
 
-## 3. Tag Lookup API
+## 4. Tag Lookup API
 
 Use this to verify tag enrollment before check-in/check-out.
 
@@ -235,7 +362,7 @@ GET /api/enrollments/tag/NFC-001-A7K9M2X5
 
 ---
 
-## 4. Reader Heartbeat API
+## 5. Reader Heartbeat API
 
 Send periodic heartbeats to show reader is online.
 
@@ -268,7 +395,8 @@ POST /api/readers/{id}/heartbeat
 
 ## Implementation Examples
 
-### Python (Raspberry Pi)
+### Python (Raspberry Pi) - Single Reader Toggle
+
 ```python
 import requests
 import time
@@ -278,9 +406,12 @@ AUTH_TOKEN = "your_bearer_token_here"
 READER_ID = "READER-001"
 LOCATION = "Main Entrance"
 
-def check_in(tag_uid):
-    """Send check-in request when NFC tag is detected"""
-    url = f"{API_BASE_URL}/api/attendance/checkin"
+def toggle_attendance(tag_uid):
+    """
+    Single function to handle both check-in and check-out.
+    The API automatically determines the action based on current status.
+    """
+    url = f"{API_BASE_URL}/api/attendance/toggle"
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {AUTH_TOKEN}"
@@ -296,41 +427,20 @@ def check_in(tag_uid):
         response = requests.post(url, json=payload, headers=headers)
         data = response.json()
         
-        if response.status_code == 201:
-            print(f"✓ Check-in successful: {data['employee']['name']}")
-            return True
-        elif response.status_code == 200:
-            print(f"ℹ Already checked in: {data['employee']['name']}")
-            return True
-        else:
-            print(f"✗ Error: {data.get('error', 'Unknown error')}")
-            return False
+        if response.status_code in [200, 201]:
+            action = data.get('action', 'unknown')
+            employee_name = data['employee']['name']
             
-    except Exception as e:
-        print(f"✗ Request failed: {str(e)}")
-        return False
-
-def check_out(tag_uid):
-    """Send check-out request when NFC tag is detected"""
-    url = f"{API_BASE_URL}/api/attendance/checkout"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {AUTH_TOKEN}"
-    }
-    payload = {
-        "tagUid": tag_uid,
-        "readerId": READER_ID,
-        "location": LOCATION
-    }
-    
-    try:
-        response = requests.post(url, json=payload, headers=headers)
-        data = response.json()
-        
-        if response.status_code == 200:
-            duration = data.get('duration', 0)
-            print(f"✓ Check-out successful: {data['employee']['name']} ({duration} min)")
-            return True
+            if action == 'checkin':
+                print(f"✓ CHECK-IN: {employee_name}")
+                print(f"  Time: {data['timeIn']}")
+                return True
+            elif action == 'checkout':
+                duration = data.get('duration', 0)
+                hours = duration / 60
+                print(f"✓ CHECK-OUT: {employee_name}")
+                print(f"  Duration: {hours:.1f} hours ({duration} minutes)")
+                return True
         else:
             print(f"✗ Error: {data.get('error', 'Unknown error')}")
             return False
@@ -365,6 +475,7 @@ def send_heartbeat():
 def main():
     print(f"NFC Reader {READER_ID} starting...")
     print(f"Location: {LOCATION}")
+    print(f"Mode: Single Reader Toggle (Auto Check-In/Check-Out)")
     
     last_heartbeat = 0
     
@@ -379,18 +490,8 @@ def main():
         tag_uid = detect_nfc_tag()  # Your NFC reading function
         
         if tag_uid:
-            print(f"Tag detected: {tag_uid}")
-            
-            # Determine check-in or check-out based on your logic
-            # Option 1: Always check-in (system handles duplicate)
-            check_in(tag_uid)
-            
-            # Option 2: Toggle behavior
-            # is_checked_in = check_current_status(tag_uid)
-            # if is_checked_in:
-            #     check_out(tag_uid)
-            # else:
-            #     check_in(tag_uid)
+            print(f"\n📱 Tag detected: {tag_uid}")
+            toggle_attendance(tag_uid)
             
             time.sleep(2)  # Prevent multiple reads
         
@@ -400,7 +501,8 @@ if __name__ == "__main__":
     main()
 ```
 
-### Node.js (ESP32 / IoT Device)
+### Node.js (ESP32 / IoT Device) - Single Reader Toggle
+
 ```javascript
 const axios = require('axios');
 
@@ -409,10 +511,10 @@ const AUTH_TOKEN = 'your_bearer_token_here';
 const READER_ID = 'READER-001';
 const LOCATION = 'Main Entrance';
 
-async function checkIn(tagUid) {
+async function toggleAttendance(tagUid) {
   try {
     const response = await axios.post(
-      `${API_BASE_URL}/api/attendance/checkin`,
+      `${API_BASE_URL}/api/attendance/toggle`,
       {
         tagUid,
         readerId: READER_ID,
@@ -427,37 +529,22 @@ async function checkIn(tagUid) {
       }
     );
     
-    console.log(`✓ Check-in: ${response.data.employee.name}`);
-    return true;
-  } catch (error) {
-    console.error('✗ Check-in failed:', error.response?.data?.error || error.message);
-    return false;
-  }
-}
-
-async function checkOut(tagUid) {
-  try {
-    const response = await axios.post(
-      `${API_BASE_URL}/api/attendance/checkout`,
-      {
-        tagUid,
-        readerId: READER_ID,
-        location: LOCATION
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${AUTH_TOKEN}`
-        }
-      }
-    );
+    const { action, employee, duration } = response.data;
     
-    const duration = response.data.duration;
-    console.log(`✓ Check-out: ${response.data.employee.name} (${duration} min)`);
-    return true;
+    if (action === 'checkin') {
+      console.log(`✓ CHECK-IN: ${employee.name}`);
+      console.log(`  Department: ${employee.department}`);
+      return { success: true, action: 'checkin' };
+    } else if (action === 'checkout') {
+      const hours = (duration / 60).toFixed(1);
+      console.log(`✓ CHECK-OUT: ${employee.name}`);
+      console.log(`  Duration: ${hours} hours`);
+      return { success: true, action: 'checkout', duration };
+    }
+    
   } catch (error) {
-    console.error('✗ Check-out failed:', error.response?.data?.error || error.message);
-    return false;
+    console.error('✗ Toggle failed:', error.response?.data?.error || error.message);
+    return { success: false, error: error.response?.data?.error };
   }
 }
 
@@ -487,13 +574,33 @@ async function sendHeartbeat() {
 setInterval(sendHeartbeat, 60000);
 
 // Example: Handle NFC tag detection
-function onTagDetected(tagUid) {
-  console.log(`Tag detected: ${tagUid}`);
-  checkIn(tagUid);
+async function onTagDetected(tagUid) {
+  console.log(`\n📱 Tag detected: ${tagUid}`);
+  const result = await toggleAttendance(tagUid);
+  
+  // Provide visual/audio feedback based on action
+  if (result.success) {
+    if (result.action === 'checkin') {
+      // Green LED + Single beep for check-in
+      triggerFeedback('success', 'checkin');
+    } else if (result.action === 'checkout') {
+      // Blue LED + Double beep for check-out
+      triggerFeedback('success', 'checkout');
+    }
+  } else {
+    // Red LED + Error beep
+    triggerFeedback('error');
+  }
+}
+
+function triggerFeedback(type, action) {
+  // Implement LED/buzzer control based on your hardware
+  console.log(`Feedback: ${type} - ${action || 'error'}`);
 }
 ```
 
-### Arduino (ESP32 with PN532)
+### Arduino (ESP32 with PN532) - Single Reader Toggle
+
 ```cpp
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -509,11 +616,21 @@ const char* authToken = "your_bearer_token_here";
 const char* readerId = "READER-001";
 const char* location = "Main Entrance";
 
+// LED pins for feedback
+#define LED_GREEN 2
+#define LED_RED 4
+#define BUZZER_PIN 5
+
 PN532_I2C pn532i2c(Wire);
 PN532 nfc(pn532i2c);
 
 void setup() {
   Serial.begin(115200);
+  
+  // Setup LED pins
+  pinMode(LED_GREEN, OUTPUT);
+  pinMode(LED_RED, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
   
   // Connect to WiFi
   WiFi.begin(ssid, password);
@@ -522,6 +639,7 @@ void setup() {
     Serial.print(".");
   }
   Serial.println("\nWiFi connected");
+  Serial.println("Mode: Single Reader Toggle");
   
   // Initialize NFC reader
   nfc.begin();
@@ -544,7 +662,7 @@ void loop() {
     Serial.print("Tag detected: ");
     Serial.println(tagUid);
     
-    checkIn(tagUid);
+    toggleAttendance(tagUid);
     
     delay(2000); // Prevent multiple reads
   }
@@ -552,10 +670,10 @@ void loop() {
   delay(100);
 }
 
-void checkIn(String tagUid) {
+void toggleAttendance(String tagUid) {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
-    String url = String(apiBaseUrl) + "/api/attendance/checkin";
+    String url = String(apiBaseUrl) + "/api/attendance/toggle";
     
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
@@ -575,13 +693,48 @@ void checkIn(String tagUid) {
     
     if (httpCode > 0) {
       String response = http.getString();
-      Serial.println("Response: " + response);
+      
+      // Parse response
+      StaticJsonDocument<512> responseDoc;
+      deserializeJson(responseDoc, response);
+      
+      String action = responseDoc["action"];
+      String employeeName = responseDoc["employee"]["name"];
       
       if (httpCode == 201 || httpCode == 200) {
-        Serial.println("✓ Check-in successful");
+        Serial.print("✓ Success: ");
+        Serial.println(action);
+        Serial.print("  Employee: ");
+        Serial.println(employeeName);
+        
+        if (action == "checkin") {
+          // Green LED + Single beep for check-in
+          digitalWrite(LED_GREEN, HIGH);
+          tone(BUZZER_PIN, 1000, 200);
+          delay(500);
+          digitalWrite(LED_GREEN, LOW);
+        } else if (action == "checkout") {
+          // Blue flash + Double beep for check-out
+          int duration = responseDoc["duration"];
+          Serial.print("  Duration: ");
+          Serial.print(duration);
+          Serial.println(" minutes");
+          
+          digitalWrite(LED_GREEN, HIGH);
+          tone(BUZZER_PIN, 1500, 200);
+          delay(300);
+          tone(BUZZER_PIN, 1500, 200);
+          delay(500);
+          digitalWrite(LED_GREEN, LOW);
+        }
       }
     } else {
       Serial.println("✗ HTTP request failed");
+      // Red LED + Error beep
+      digitalWrite(LED_RED, HIGH);
+      tone(BUZZER_PIN, 500, 500);
+      delay(1000);
+      digitalWrite(LED_RED, LOW);
     }
     
     http.end();
@@ -591,24 +744,55 @@ void checkIn(String tagUid) {
 
 ---
 
-## Reader Logic Options
+## Reader Logic - Single Device Implementation
 
-### Option 1: Always Check-In (Recommended)
-- Reader always calls check-in API
-- System automatically handles:
-  - If already checked in → returns existing record
-  - If not checked in → creates new record
-- Simple implementation
+### How It Works
 
-### Option 2: Smart Toggle
-- Reader checks current status first
-- Toggles between check-in and check-out
-- Requires additional API call to check status
+The **single-reader toggle approach** is the recommended implementation:
 
-### Option 3: Dual Readers
-- One reader for check-in (entrance)
-- Another reader for check-out (exit)
-- Each reader calls appropriate endpoint
+```
+Employee Taps NFC Card on Single Reader
+          ↓
+API Checks: Does employee have active check-in today?
+          ↓
+     ┌────┴────┐
+     ↓         ↓
+    NO        YES
+     ↓         ↓
+  Time In   Time Out
+  (Start)   (End + Duration)
+```
+
+### Benefits
+
+✅ **Cost-Effective**: Only need one NFC reader device  
+✅ **Simple Setup**: Single device to configure and maintain  
+✅ **Zero Confusion**: Employees always use the same reader  
+✅ **Automatic Detection**: System intelligently determines action  
+✅ **Accurate Duration**: Calculates work hours automatically  
+✅ **Real-time Feedback**: Instant response shows check-in or check-out  
+
+### Implementation Tips
+
+1. **Visual Feedback**: Use different LED colors for check-in vs check-out
+   - Green LED + Single beep = Check-in
+   - Blue LED + Double beep = Check-out
+   - Red LED + Long beep = Error
+
+2. **Display Information**: Show employee name and action on LCD/OLED
+   ```
+   ✓ Sarah Johnson
+   CHECK-IN: 08:30 AM
+   ```
+   ```
+   ✓ Sarah Johnson
+   CHECK-OUT: 05:45 PM
+   Duration: 9.25 hours
+   ```
+
+3. **Debouncing**: Add 2-second delay after each tap to prevent duplicate reads
+
+4. **Offline Queue**: Store failed requests locally and sync when online
 
 ---
 
@@ -642,21 +826,34 @@ Always include `idempotencyKey` to prevent duplicate check-ins:
 - Send heartbeat every 60 seconds
 - Update reader status to "offline" if heartbeat stops
 
-### 6. User Feedback
-Provide clear feedback to employees:
-- ✅ Green LED + Beep: Success
-- ❌ Red LED + Error Beep: Failed
-- 🟡 Yellow LED: Already checked in
-- Display employee name on screen
+### 6. User Feedback (Single Reader)
+
+Provide clear differentiated feedback:
+
+**Check-In (Morning):**
+- ✅ Green LED (solid 1 second)
+- 🔊 Single beep (1000Hz, 200ms)
+- 📺 Display: "✓ CHECK-IN | Sarah Johnson | 08:30 AM"
+
+**Check-Out (Evening):**
+- 🔵 Blue/Green LED (flash twice)
+- 🔊 Double beep (1500Hz, 200ms each)
+- 📺 Display: "✓ CHECK-OUT | Sarah Johnson | 9.5 hours"
+
+**Error:**
+- ❌ Red LED (flash 3 times)
+- 🔊 Error beep (500Hz, 500ms)
+- 📺 Display: "✗ Tag Not Found"
 
 ---
 
 ## Testing
 
-### Test with cURL
+### Test with cURL - Toggle API
+
 ```bash
-# Check-in
-curl -X POST http://localhost:3000/api/attendance/checkin \
+# First tap - Should check-in
+curl -X POST http://localhost:3000/api/attendance/toggle \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
@@ -665,17 +862,21 @@ curl -X POST http://localhost:3000/api/attendance/checkin \
     "location": "Main Entrance"
   }'
 
-# Check-out
-curl -X POST http://localhost:3000/api/attendance/checkout \
+# Response: action: "checkin"
+
+# Second tap (same day) - Should check-out
+curl -X POST http://localhost:3000/api/attendance/toggle \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
     "tagUid": "NFC-001-A7K9M2X5",
     "readerId": "READER-001",
-    "location": "Main Exit"
+    "location": "Main Entrance"
   }'
 
-# Verify tag
+# Response: action: "checkout" with duration
+
+# Verify tag enrollment
 curl -X GET http://localhost:3000/api/enrollments/tag/NFC-001-A7K9M2X5 \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
@@ -699,18 +900,22 @@ curl -X GET http://localhost:3000/api/enrollments/tag/NFC-001-A7K9M2X5 \
 ### Issue: "NFC tag is not active"
 **Solution:** Activate tag in enrollment management page
 
-### Issue: "No active check-in found"
-**Solution:** Employee must check in first before checking out
+### Issue: Employee can't check-out
+**Solution:** Verify employee checked in today. Check attendance records in dashboard.
 
 ### Issue: Network timeout
 **Solution:** Check reader network connection and API endpoint availability
+
+### Issue: Wrong action detected (check-in instead of check-out)
+**Solution:** Verify system date/time is correct. Check if previous check-out was recorded.
 
 ---
 
 ## Support
 
 For technical support or questions:
-- **Documentation:** See main README.md
+- **Documentation:** See SINGLE_READER_IMPLEMENTATION.md for detailed flow
+- **Employee Module:** See EMPLOYEE_LOGIN_MODULE.md
 - **Database:** Access database studio in dashboard
 - **API Testing:** Use provided test endpoints
 
@@ -719,18 +924,42 @@ For technical support or questions:
 ## Hardware Recommendations
 
 ### Supported NFC Readers
-- **PN532 NFC Module** (I2C/SPI/UART)
-- **RC522 RFID Reader**
-- **ACR122U USB NFC Reader**
-- **Custom ESP32-based readers**
+- **PN532 NFC Module** (I2C/SPI/UART) - Recommended for ESP32
+- **RC522 RFID Reader** - Budget-friendly option
+- **ACR122U USB NFC Reader** - For Raspberry Pi/PC
+- **Custom ESP32-based readers** - Best for production
 
 ### Supported NFC Tags
-- **MIFARE Classic 1K**
-- **MIFARE Ultralight**
-- **NTAG213/215/216**
+- **MIFARE Classic 1K** - Most common
+- **MIFARE Ultralight** - Cost-effective
+- **NTAG213/215/216** - High memory
 - **ISO 14443A compatible tags**
+
+### Hardware Setup Example (Single Reader)
+
+```
+┌────────────────────────────────┐
+│     ESP32 Development Board    │
+│                                │
+│  ┌──────────────────────────┐ │
+│  │     PN532 NFC Module     │ │
+│  │  (I2C: SDA=21, SCL=22)   │ │
+│  └──────────────────────────┘ │
+│                                │
+│  LED Indicators:               │
+│  • Green (GPIO 2) - Check-In   │
+│  • Red (GPIO 4) - Error        │
+│  • Buzzer (GPIO 5) - Audio     │
+│                                │
+│  Optional: OLED Display        │
+│  (I2C: SDA=21, SCL=22)         │
+└────────────────────────────────┘
+         ↓ WiFi
+    Internet → API Server
+```
 
 ---
 
-**Last Updated:** December 8, 2024  
-**API Version:** 1.0.0
+**Last Updated:** December 9, 2025  
+**API Version:** 2.0.0 (Single Reader Toggle)  
+**Implementation:** Single NFC Reader for Time In & Time Out
