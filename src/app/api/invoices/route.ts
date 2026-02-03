@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+// Force rebuild
 import { db } from '@/db';
 import { invoices } from '@/db/schema';
 import { eq, like, desc, and } from 'drizzle-orm';
+import { getCurrentUser } from '@/lib/auth';
 
 // Helper function to generate invoice number
 function generateInvoiceNumber(): string {
@@ -31,9 +33,9 @@ export async function GET(request: NextRequest) {
     // Single record by ID
     if (id) {
       if (!id || isNaN(parseInt(id))) {
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: "Valid ID is required",
-          code: "INVALID_ID" 
+          code: "INVALID_ID"
         }, { status: 400 });
       }
 
@@ -43,9 +45,9 @@ export async function GET(request: NextRequest) {
         .limit(1);
 
       if (invoice.length === 0) {
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: 'Invoice not found',
-          code: 'NOT_FOUND' 
+          code: 'NOT_FOUND'
         }, { status: 404 });
       }
 
@@ -64,9 +66,9 @@ export async function GET(request: NextRequest) {
     // Add status filter
     if (status) {
       if (!isValidStatus(status)) {
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: "Invalid status. Must be one of: draft, sent, paid, overdue",
-          code: "INVALID_STATUS" 
+          code: "INVALID_STATUS"
         }, { status: 400 });
       }
       conditions.push(eq(invoices.status, status));
@@ -90,7 +92,7 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('GET error:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error')
     }, { status: 500 });
   }
@@ -111,121 +113,123 @@ export async function POST(request: NextRequest) {
       taxRate,
       taxAmount,
       totalAmount,
-      notes,
-      createdBy
+      notes
     } = body;
+
+    const user = await getCurrentUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // User ID from session
+    const createdBy = user.id;
 
     // Validate required fields
     if (!clientName) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Client name is required",
-        code: "MISSING_CLIENT_NAME" 
+        code: "MISSING_CLIENT_NAME"
       }, { status: 400 });
     }
 
     if (!clientEmail) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Client email is required",
-        code: "MISSING_CLIENT_EMAIL" 
+        code: "MISSING_CLIENT_EMAIL"
       }, { status: 400 });
     }
 
     if (!isValidEmail(clientEmail)) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Invalid email format",
-        code: "INVALID_EMAIL" 
+        code: "INVALID_EMAIL"
       }, { status: 400 });
     }
 
     if (!issueDate) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Issue date is required",
-        code: "MISSING_ISSUE_DATE" 
+        code: "MISSING_ISSUE_DATE"
       }, { status: 400 });
     }
 
     if (!dueDate) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Due date is required",
-        code: "MISSING_DUE_DATE" 
+        code: "MISSING_DUE_DATE"
       }, { status: 400 });
     }
 
     if (!status) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Status is required",
-        code: "MISSING_STATUS" 
+        code: "MISSING_STATUS"
       }, { status: 400 });
     }
 
     if (!isValidStatus(status)) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Invalid status. Must be one of: draft, sent, paid, overdue",
-        code: "INVALID_STATUS" 
+        code: "INVALID_STATUS"
       }, { status: 400 });
     }
 
     if (subtotal === undefined || subtotal === null) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Subtotal is required",
-        code: "MISSING_SUBTOTAL" 
+        code: "MISSING_SUBTOTAL"
       }, { status: 400 });
     }
 
     if (taxRate === undefined || taxRate === null) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Tax rate is required",
-        code: "MISSING_TAX_RATE" 
+        code: "MISSING_TAX_RATE"
       }, { status: 400 });
     }
 
     if (taxAmount === undefined || taxAmount === null) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Tax amount is required",
-        code: "MISSING_TAX_AMOUNT" 
+        code: "MISSING_TAX_AMOUNT"
       }, { status: 400 });
     }
 
     if (totalAmount === undefined || totalAmount === null) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Total amount is required",
-        code: "MISSING_TOTAL_AMOUNT" 
+        code: "MISSING_TOTAL_AMOUNT"
       }, { status: 400 });
     }
 
-    if (!createdBy) {
-      return NextResponse.json({ 
-        error: "createdBy is required",
-        code: "MISSING_CREATED_BY" 
-      }, { status: 400 });
-    }
+    // Removed explicit body check for createdBy since it comes from session
 
     // Validate numeric fields are positive
     if (subtotal < 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Subtotal must be a positive number",
-        code: "INVALID_SUBTOTAL" 
+        code: "INVALID_SUBTOTAL"
       }, { status: 400 });
     }
 
     if (taxRate < 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Tax rate must be a positive number",
-        code: "INVALID_TAX_RATE" 
+        code: "INVALID_TAX_RATE"
       }, { status: 400 });
     }
 
     if (taxAmount < 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Tax amount must be a positive number",
-        code: "INVALID_TAX_AMOUNT" 
+        code: "INVALID_TAX_AMOUNT"
       }, { status: 400 });
     }
 
     if (totalAmount < 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Total amount must be a positive number",
-        code: "INVALID_TOTAL_AMOUNT" 
+        code: "INVALID_TOTAL_AMOUNT"
       }, { status: 400 });
     }
 
@@ -258,7 +262,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('POST error:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error')
     }, { status: 500 });
   }
@@ -275,9 +279,9 @@ export async function PUT(request: NextRequest) {
     const id = searchParams.get('id');
 
     if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Valid ID is required",
-        code: "INVALID_ID" 
+        code: "INVALID_ID"
       }, { status: 400 });
     }
 
@@ -285,9 +289,9 @@ export async function PUT(request: NextRequest) {
 
     // Security check: reject if createdBy provided in body
     if ('createdBy' in body || 'created_by' in body) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "User ID cannot be provided in request body",
-        code: "USER_ID_NOT_ALLOWED" 
+        code: "USER_ID_NOT_ALLOWED"
       }, { status: 400 });
     }
 
@@ -301,9 +305,9 @@ export async function PUT(request: NextRequest) {
       .limit(1);
 
     if (existing.length === 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Invoice not found',
-        code: 'NOT_FOUND' 
+        code: 'NOT_FOUND'
       }, { status: 404 });
     }
 
@@ -323,46 +327,46 @@ export async function PUT(request: NextRequest) {
 
     // Validate email format if provided
     if (clientEmail && !isValidEmail(clientEmail)) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Invalid email format",
-        code: "INVALID_EMAIL" 
+        code: "INVALID_EMAIL"
       }, { status: 400 });
     }
 
     // Validate status if provided
     if (status && !isValidStatus(status)) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Invalid status. Must be one of: draft, sent, paid, overdue",
-        code: "INVALID_STATUS" 
+        code: "INVALID_STATUS"
       }, { status: 400 });
     }
 
     // Validate numeric fields if provided
     if (subtotal !== undefined && subtotal < 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Subtotal must be a positive number",
-        code: "INVALID_SUBTOTAL" 
+        code: "INVALID_SUBTOTAL"
       }, { status: 400 });
     }
 
     if (taxRate !== undefined && taxRate < 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Tax rate must be a positive number",
-        code: "INVALID_TAX_RATE" 
+        code: "INVALID_TAX_RATE"
       }, { status: 400 });
     }
 
     if (taxAmount !== undefined && taxAmount < 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Tax amount must be a positive number",
-        code: "INVALID_TAX_AMOUNT" 
+        code: "INVALID_TAX_AMOUNT"
       }, { status: 400 });
     }
 
     if (totalAmount !== undefined && totalAmount < 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Total amount must be a positive number",
-        code: "INVALID_TOTAL_AMOUNT" 
+        code: "INVALID_TOTAL_AMOUNT"
       }, { status: 400 });
     }
 
@@ -393,9 +397,9 @@ export async function PUT(request: NextRequest) {
       .returning();
 
     if (updated.length === 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Invoice not found',
-        code: 'NOT_FOUND' 
+        code: 'NOT_FOUND'
       }, { status: 404 });
     }
 
@@ -403,7 +407,7 @@ export async function PUT(request: NextRequest) {
 
   } catch (error) {
     console.error('PUT error:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error')
     }, { status: 500 });
   }
@@ -420,9 +424,9 @@ export async function DELETE(request: NextRequest) {
     const id = searchParams.get('id');
 
     if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Valid ID is required",
-        code: "INVALID_ID" 
+        code: "INVALID_ID"
       }, { status: 400 });
     }
 
@@ -436,9 +440,9 @@ export async function DELETE(request: NextRequest) {
       .limit(1);
 
     if (existing.length === 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Invoice not found',
-        code: 'NOT_FOUND' 
+        code: 'NOT_FOUND'
       }, { status: 404 });
     }
 
@@ -451,20 +455,20 @@ export async function DELETE(request: NextRequest) {
       .returning();
 
     if (deleted.length === 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Invoice not found',
-        code: 'NOT_FOUND' 
+        code: 'NOT_FOUND'
       }, { status: 404 });
     }
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       message: 'Invoice deleted successfully',
       invoice: deleted[0]
     }, { status: 200 });
 
   } catch (error) {
     console.error('DELETE error:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error')
     }, { status: 500 });
   }

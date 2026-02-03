@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { employees } from '@/db/schema';
 import { eq, like, and, or, asc } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, auth } from '@/lib/auth';
+import { sendWelcomeEmail } from '@/lib/email';
 
 // Email validation regex
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -29,10 +30,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Authorization check - all authenticated users can view
-    if (!hasPermission(user.role, ['admin', 'hr', 'reader', 'employee'])) {
-      return NextResponse.json({ 
+    if (!hasPermission(user.role || '', ['admin', 'hr', 'reader', 'employee'])) {
+      return NextResponse.json({
         error: 'Insufficient permissions',
-        code: 'FORBIDDEN' 
+        code: 'FORBIDDEN'
       }, { status: 403 });
     }
 
@@ -61,9 +62,9 @@ export async function GET(request: NextRequest) {
 
     if (status) {
       if (!VALID_STATUSES.includes(status)) {
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
-          code: 'INVALID_STATUS' 
+          code: 'INVALID_STATUS'
         }, { status: 400 });
       }
       conditions.push(eq(employees.status, status));
@@ -84,8 +85,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(results, { status: 200 });
   } catch (error) {
     console.error('GET error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error: ' + (error as Error).message 
+    return NextResponse.json({
+      error: 'Internal server error: ' + (error as Error).message
     }, { status: 500 });
   }
 }
@@ -99,52 +100,52 @@ export async function POST(request: NextRequest) {
     }
 
     // Authorization check - only admin and hr can create
-    if (!hasPermission(user.role, ['admin', 'hr'])) {
-      return NextResponse.json({ 
+    if (!hasPermission(user.role || '', ['admin', 'hr'])) {
+      return NextResponse.json({
         error: 'Insufficient permissions. Only admin or hr roles can create employees.',
-        code: 'FORBIDDEN' 
+        code: 'FORBIDDEN'
       }, { status: 403 });
     }
 
     const body = await request.json();
-    const { 
-      name, 
-      email, 
-      department, 
-      nfcCardId, 
-      photoUrl, 
-      salary, 
-      hourlyRate, 
-      enrollmentDate 
+    const {
+      name,
+      email,
+      department,
+      nfcCardId,
+      photoUrl,
+      salary,
+      hourlyRate,
+      enrollmentDate
     } = body;
 
     // Validate required fields
     if (!name || !name.trim()) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Name is required',
-        code: 'MISSING_NAME' 
+        code: 'MISSING_NAME'
       }, { status: 400 });
     }
 
     if (!email || !email.trim()) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Email is required',
-        code: 'MISSING_EMAIL' 
+        code: 'MISSING_EMAIL'
       }, { status: 400 });
     }
 
     if (!department || !department.trim()) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Department is required',
-        code: 'MISSING_DEPARTMENT' 
+        code: 'MISSING_DEPARTMENT'
       }, { status: 400 });
     }
 
     // Validate email format
     if (!isValidEmail(email)) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Invalid email format',
-        code: 'INVALID_EMAIL' 
+        code: 'INVALID_EMAIL'
       }, { status: 400 });
     }
 
@@ -152,9 +153,9 @@ export async function POST(request: NextRequest) {
     if (salary !== undefined && salary !== null) {
       const salaryNum = parseFloat(salary);
       if (isNaN(salaryNum) || salaryNum < 0) {
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: 'Salary must be a positive number',
-          code: 'INVALID_SALARY' 
+          code: 'INVALID_SALARY'
         }, { status: 400 });
       }
     }
@@ -163,9 +164,9 @@ export async function POST(request: NextRequest) {
     if (hourlyRate !== undefined && hourlyRate !== null) {
       const rateNum = parseFloat(hourlyRate);
       if (isNaN(rateNum) || rateNum < 0) {
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: 'Hourly rate must be a positive number',
-          code: 'INVALID_HOURLY_RATE' 
+          code: 'INVALID_HOURLY_RATE'
         }, { status: 400 });
       }
     }
@@ -177,9 +178,9 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (existingEmail.length > 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Email already exists',
-        code: 'DUPLICATE_EMAIL' 
+        code: 'DUPLICATE_EMAIL'
       }, { status: 400 });
     }
 
@@ -191,9 +192,9 @@ export async function POST(request: NextRequest) {
         .limit(1);
 
       if (existingNfc.length > 0) {
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: 'NFC Card ID already exists',
-          code: 'DUPLICATE_NFC_CARD' 
+          code: 'DUPLICATE_NFC_CARD'
         }, { status: 400 });
       }
     }
@@ -227,16 +228,73 @@ export async function POST(request: NextRequest) {
       insertData.enrollmentDate = enrollmentDate.trim();
     }
 
-    // Insert employee
-    const newEmployee = await db.insert(employees)
-      .values(insertData)
-      .returning();
+    // Insert employee first to get the ID (needed for password)
+    let newEmployee;
+    try {
+      const inserted = await db.insert(employees)
+        .values(insertData)
+        .returning();
+      newEmployee = inserted[0];
+    } catch (dbError) {
+      console.error('Database insert error:', dbError);
+      return NextResponse.json({
+        error: 'Failed to create employee record',
+        code: 'DB_INSERT_ERROR'
+      }, { status: 500 });
+    }
 
-    return NextResponse.json(newEmployee[0], { status: 201 });
+    // Generate password: TechSonance + ID
+    const generatedPassword = `TechSonance${newEmployee.id}`;
+
+    // Create user account via Better Auth
+    try {
+      const signUpRes = await auth.api.signUpEmail({
+        body: {
+          email: insertData.email,
+          password: generatedPassword,
+          name: insertData.name,
+          role: 'employee' // Explicitly set role
+        },
+        asResponse: false
+      });
+
+      if (!signUpRes?.user) {
+        throw new Error("Failed to create user account");
+      }
+
+      // Send welcome email (fire and forget or await?)
+      // We await to log success/failure but don't fail request if email fails
+      await sendWelcomeEmail({
+        email: insertData.email,
+        name: insertData.name,
+        password: generatedPassword,
+        designation: insertData.department
+      });
+
+      return NextResponse.json(newEmployee, { status: 201 });
+
+    } catch (authError: any) {
+      console.error('Auth/Email error:', authError);
+
+      // COMPENSATION: Delete the created employee since user account failed
+      await db.delete(employees).where(eq(employees.id, newEmployee.id));
+
+      if (authError?.body?.message === "User already exists" || authError?.message?.includes("already exists")) {
+        return NextResponse.json({
+          error: 'User account with this email already exists',
+          code: 'DUPLICATE_USER'
+        }, { status: 400 });
+      }
+
+      return NextResponse.json({
+        error: 'Failed to create user account: ' + (authError.message || 'Unknown error'),
+        code: 'AUTH_CREATE_ERROR'
+      }, { status: 500 });
+    }
   } catch (error) {
     console.error('POST error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error: ' + (error as Error).message 
+    return NextResponse.json({
+      error: 'Internal server error: ' + (error as Error).message
     }, { status: 500 });
   }
 }
@@ -250,10 +308,10 @@ export async function PUT(request: NextRequest) {
     }
 
     // Authorization check - only admin and hr can update
-    if (!hasPermission(user.role, ['admin', 'hr'])) {
-      return NextResponse.json({ 
+    if (!hasPermission(user.role || '', ['admin', 'hr'])) {
+      return NextResponse.json({
         error: 'Insufficient permissions. Only admin or hr roles can update employees.',
-        code: 'FORBIDDEN' 
+        code: 'FORBIDDEN'
       }, { status: 403 });
     }
 
@@ -262,9 +320,9 @@ export async function PUT(request: NextRequest) {
 
     // Validate ID
     if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Valid ID is required',
-        code: 'INVALID_ID' 
+        code: 'INVALID_ID'
       }, { status: 400 });
     }
 
@@ -277,23 +335,23 @@ export async function PUT(request: NextRequest) {
       .limit(1);
 
     if (existing.length === 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Employee not found',
-        code: 'NOT_FOUND' 
+        code: 'NOT_FOUND'
       }, { status: 404 });
     }
 
     const body = await request.json();
-    const { 
-      name, 
-      email, 
-      department, 
-      nfcCardId, 
-      photoUrl, 
-      salary, 
-      hourlyRate, 
-      status, 
-      enrollmentDate 
+    const {
+      name,
+      email,
+      department,
+      nfcCardId,
+      photoUrl,
+      salary,
+      hourlyRate,
+      status,
+      enrollmentDate
     } = body;
 
     const updates: any = {};
@@ -301,9 +359,9 @@ export async function PUT(request: NextRequest) {
     // Validate and add name if provided
     if (name !== undefined) {
       if (!name || !name.trim()) {
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: 'Name cannot be empty',
-          code: 'INVALID_NAME' 
+          code: 'INVALID_NAME'
         }, { status: 400 });
       }
       updates.name = name.trim();
@@ -312,18 +370,18 @@ export async function PUT(request: NextRequest) {
     // Validate and add email if provided
     if (email !== undefined) {
       if (!email || !email.trim()) {
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: 'Email cannot be empty',
-          code: 'INVALID_EMAIL' 
+          code: 'INVALID_EMAIL'
         }, { status: 400 });
       }
 
       const normalizedEmail = email.toLowerCase().trim();
 
       if (!isValidEmail(normalizedEmail)) {
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: 'Invalid email format',
-          code: 'INVALID_EMAIL' 
+          code: 'INVALID_EMAIL'
         }, { status: 400 });
       }
 
@@ -334,9 +392,9 @@ export async function PUT(request: NextRequest) {
         .limit(1);
 
       if (existingEmail.length > 0 && existingEmail[0].id !== employeeId) {
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: 'Email already exists',
-          code: 'DUPLICATE_EMAIL' 
+          code: 'DUPLICATE_EMAIL'
         }, { status: 400 });
       }
 
@@ -346,9 +404,9 @@ export async function PUT(request: NextRequest) {
     // Validate and add department if provided
     if (department !== undefined) {
       if (!department || !department.trim()) {
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: 'Department cannot be empty',
-          code: 'INVALID_DEPARTMENT' 
+          code: 'INVALID_DEPARTMENT'
         }, { status: 400 });
       }
       updates.department = department.trim();
@@ -364,9 +422,9 @@ export async function PUT(request: NextRequest) {
           .limit(1);
 
         if (existingNfc.length > 0 && existingNfc[0].id !== employeeId) {
-          return NextResponse.json({ 
+          return NextResponse.json({
             error: 'NFC Card ID already exists',
-            code: 'DUPLICATE_NFC_CARD' 
+            code: 'DUPLICATE_NFC_CARD'
           }, { status: 400 });
         }
 
@@ -386,9 +444,9 @@ export async function PUT(request: NextRequest) {
       if (salary !== null) {
         const salaryNum = parseFloat(salary);
         if (isNaN(salaryNum) || salaryNum < 0) {
-          return NextResponse.json({ 
+          return NextResponse.json({
             error: 'Salary must be a positive number',
-            code: 'INVALID_SALARY' 
+            code: 'INVALID_SALARY'
           }, { status: 400 });
         }
         updates.salary = salaryNum;
@@ -402,9 +460,9 @@ export async function PUT(request: NextRequest) {
       if (hourlyRate !== null) {
         const rateNum = parseFloat(hourlyRate);
         if (isNaN(rateNum) || rateNum < 0) {
-          return NextResponse.json({ 
+          return NextResponse.json({
             error: 'Hourly rate must be a positive number',
-            code: 'INVALID_HOURLY_RATE' 
+            code: 'INVALID_HOURLY_RATE'
           }, { status: 400 });
         }
         updates.hourlyRate = rateNum;
@@ -416,9 +474,9 @@ export async function PUT(request: NextRequest) {
     // Validate and add status if provided
     if (status !== undefined) {
       if (!VALID_STATUSES.includes(status)) {
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
-          code: 'INVALID_STATUS' 
+          code: 'INVALID_STATUS'
         }, { status: 400 });
       }
       updates.status = status;
@@ -431,9 +489,9 @@ export async function PUT(request: NextRequest) {
 
     // Check if there are any updates
     if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'No fields to update',
-        code: 'NO_UPDATES' 
+        code: 'NO_UPDATES'
       }, { status: 400 });
     }
 
@@ -446,8 +504,8 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(updated[0], { status: 200 });
   } catch (error) {
     console.error('PUT error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error: ' + (error as Error).message 
+    return NextResponse.json({
+      error: 'Internal server error: ' + (error as Error).message
     }, { status: 500 });
   }
 }
@@ -461,10 +519,10 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Authorization check - only admin can delete (soft delete)
-    if (!hasPermission(user.role, ['admin'])) {
-      return NextResponse.json({ 
+    if (!hasPermission(user.role || '', ['admin'])) {
+      return NextResponse.json({
         error: 'Insufficient permissions. Only admin role can delete employees.',
-        code: 'FORBIDDEN' 
+        code: 'FORBIDDEN'
       }, { status: 403 });
     }
 
@@ -473,9 +531,9 @@ export async function DELETE(request: NextRequest) {
 
     // Validate ID
     if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Valid ID is required',
-        code: 'INVALID_ID' 
+        code: 'INVALID_ID'
       }, { status: 400 });
     }
 
@@ -488,9 +546,9 @@ export async function DELETE(request: NextRequest) {
       .limit(1);
 
     if (existing.length === 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Employee not found',
-        code: 'NOT_FOUND' 
+        code: 'NOT_FOUND'
       }, { status: 404 });
     }
 
@@ -500,14 +558,14 @@ export async function DELETE(request: NextRequest) {
       .where(eq(employees.id, employeeId))
       .returning();
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       message: 'Employee deleted successfully (soft delete)',
-      employee: deleted[0] 
+      employee: deleted[0]
     }, { status: 200 });
   } catch (error) {
     console.error('DELETE error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error: ' + (error as Error).message 
+    return NextResponse.json({
+      error: 'Internal server error: ' + (error as Error).message
     }, { status: 500 });
   }
 }

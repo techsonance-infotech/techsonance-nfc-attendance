@@ -3,16 +3,20 @@
 import { useRouter, usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { 
-  LayoutDashboard, 
-  Users, 
-  CreditCard, 
-  Clock, 
-  Radio, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Users,
+  CreditCard,
+  Clock,
+  Radio,
+  Settings,
   LogOut,
   Menu,
-  Building2
+  Building2,
+  Receipt,
+  Wallet,
+  IndianRupee,
+  BarChart3
 } from "lucide-react";
 import { authClient, useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
@@ -50,10 +54,10 @@ const navigationItems = [
     roles: ["admin", "hr"]
   },
   {
-    name: "Settings",
-    href: "/dashboard/settings",
-    icon: Settings,
-    roles: ["admin"]
+    name: "Finance",
+    href: "/dashboard/finance",
+    icon: IndianRupee,
+    roles: ["admin", "hr"]
   },
 ];
 
@@ -69,7 +73,7 @@ export default function DashboardLayout({
 
   const userRole = (session?.user as any)?.role || "employee";
 
-  const filteredNav = navigationItems.filter(item => 
+  const filteredNav = navigationItems.filter(item =>
     item.roles.includes(userRole)
   );
 
@@ -101,7 +105,7 @@ export default function DashboardLayout({
         {filteredNav.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
-          
+
           return (
             <Button
               key={item.href}

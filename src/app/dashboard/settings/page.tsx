@@ -14,15 +14,19 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Settings, 
-  Save, 
-  RefreshCw, 
-  Database, 
-  Server, 
+import {
+  Settings,
+  Save,
+  RefreshCw,
+  Database,
+  Server,
   Shield,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Building2,
+  Phone,
+  Mail,
+  FileText
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -85,30 +89,97 @@ export default function SettingsPage() {
   const [testing, setTesting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<"idle" | "success" | "error">("idle");
 
+  // Company Profile State
+  const [companySettings, setCompanySettings] = useState({
+    businessName: "",
+    businessAddress: "",
+    businessPhone: "",
+    businessEmail: "",
+    logoUrl: "",
+    termsAndConditions: "",
+    notes: ""
+  });
+  const [loadingCompany, setLoadingCompany] = useState(false);
+
   // Load saved config from localStorage on mount
   useEffect(() => {
     const savedEnv = localStorage.getItem("attendance_env") || "local";
     const savedConfig = localStorage.getItem(`attendance_config_${savedEnv}`);
-    
+
     setActiveEnv(savedEnv);
     if (savedConfig) {
       setConfig(JSON.parse(savedConfig));
     } else {
       setConfig(DEFAULT_CONFIGS[savedEnv]);
     }
+
+    // Fetch company settings
+    fetchCompanySettings();
   }, []);
+
+  const fetchCompanySettings = async () => {
+    try {
+      setLoadingCompany(true);
+      const token = localStorage.getItem("bearer_token");
+      const response = await fetch("/api/settings/company", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.id) {
+          setCompanySettings({
+            businessName: data.businessName || "",
+            businessAddress: data.businessAddress || "",
+            businessPhone: data.businessPhone || "",
+            businessEmail: data.businessEmail || "",
+            logoUrl: data.logoUrl || "",
+            termsAndConditions: data.termsAndConditions || "",
+            notes: data.notes || ""
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch company settings", error);
+    } finally {
+      setLoadingCompany(false);
+    }
+  };
+
+  const handleSaveCompany = async () => {
+    setSaving(true);
+    try {
+      const token = localStorage.getItem("bearer_token");
+      const response = await fetch("/api/settings/company", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(companySettings)
+      });
+
+      if (!response.ok) throw new Error("Failed to save settings");
+
+      toast.success("Company profile saved successfully");
+    } catch (error) {
+      toast.error("Failed to save company profile");
+      console.error(error);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // Handle environment switch
   const handleEnvSwitch = (env: string) => {
     setActiveEnv(env);
     const savedConfig = localStorage.getItem(`attendance_config_${env}`);
-    
+
     if (savedConfig) {
       setConfig(JSON.parse(savedConfig));
     } else {
       setConfig(DEFAULT_CONFIGS[env]);
     }
-    
+
     setConnectionStatus("idle");
   };
 
@@ -123,12 +194,12 @@ export default function SettingsPage() {
   // Save configuration
   const handleSave = () => {
     setSaving(true);
-    
+
     try {
       // Save to localStorage
       localStorage.setItem("attendance_env", activeEnv);
       localStorage.setItem(`attendance_config_${activeEnv}`, JSON.stringify(config));
-      
+
       toast.success("Configuration saved successfully");
     } catch (error) {
       toast.error("Failed to save configuration");
@@ -155,7 +226,7 @@ export default function SettingsPage() {
     try {
       const token = localStorage.getItem("bearer_token");
       const testUrl = config.apiBaseUrl + config.employeeApiUrl;
-      
+
       const response = await fetch(testUrl, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -181,7 +252,7 @@ export default function SettingsPage() {
   // Export config as JSON
   const handleExportConfig = () => {
     const allConfigs: Record<string, EnvironmentConfig> = {};
-    
+
     Object.keys(DEFAULT_CONFIGS).forEach((env) => {
       const savedConfig = localStorage.getItem(`attendance_config_${env}`);
       allConfigs[env] = savedConfig ? JSON.parse(savedConfig) : DEFAULT_CONFIGS[env];
@@ -199,7 +270,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -218,6 +289,10 @@ export default function SettingsPage() {
 
       <Tabs defaultValue="environment" className="space-y-6">
         <TabsList>
+          <TabsTrigger value="company">
+            <Building2 className="mr-2 h-4 w-4" />
+            Company Profile
+          </TabsTrigger>
           <TabsTrigger value="environment">
             <Server className="mr-2 h-4 w-4" />
             Environment
@@ -231,6 +306,106 @@ export default function SettingsPage() {
             Security
           </TabsTrigger>
         </TabsList>
+
+        {/* Company Profile Settings */}
+        <TabsContent value="company" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Company Profile</CardTitle>
+              <CardDescription>
+                Manage your business details for invoices and reports
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="business-name">Business Name *</Label>
+                  <Input
+                    id="business-name"
+                    value={companySettings.businessName}
+                    onChange={(e) => setCompanySettings({ ...companySettings, businessName: e.target.value })}
+                    placeholder="Acme Corp"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="business-email">Business Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="business-email"
+                      className="pl-9"
+                      value={companySettings.businessEmail}
+                      onChange={(e) => setCompanySettings({ ...companySettings, businessEmail: e.target.value })}
+                      placeholder="contact@acme.com"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="business-phone">Business Phone</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="business-phone"
+                      className="pl-9"
+                      value={companySettings.businessPhone}
+                      onChange={(e) => setCompanySettings({ ...companySettings, businessPhone: e.target.value })}
+                      placeholder="+1 (555) 000-0000"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="logo-url">Logo URL</Label>
+                  <Input
+                    id="logo-url"
+                    value={companySettings.logoUrl}
+                    onChange={(e) => setCompanySettings({ ...companySettings, logoUrl: e.target.value })}
+                    placeholder="https://example.com/logo.png"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="business-address">Business Address</Label>
+                <Input
+                  id="business-address"
+                  value={companySettings.businessAddress}
+                  onChange={(e) => setCompanySettings({ ...companySettings, businessAddress: e.target.value })}
+                  placeholder="1234 Main St, City, Country"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="terms">Terms & Conditions</Label>
+                <div className="relative">
+                  <FileText className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <textarea
+                    id="terms"
+                    className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 pl-9"
+                    placeholder="Standard invoice terms..."
+                    value={companySettings.termsAndConditions}
+                    onChange={(e) => setCompanySettings({ ...companySettings, termsAndConditions: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <Button onClick={handleSaveCompany} disabled={saving}>
+                  {saving ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Save Profile
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* Environment Configuration */}
         <TabsContent value="environment" className="space-y-6">
@@ -262,11 +437,10 @@ export default function SettingsPage() {
               </div>
 
               {connectionStatus !== "idle" && (
-                <div className={`flex items-center gap-2 p-3 rounded-lg ${
-                  connectionStatus === "success" 
-                    ? "bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200"
-                    : "bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200"
-                }`}>
+                <div className={`flex items-center gap-2 p-3 rounded-lg ${connectionStatus === "success"
+                  ? "bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200"
+                  : "bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200"
+                  }`}>
                   {connectionStatus === "success" ? (
                     <>
                       <CheckCircle2 className="h-4 w-4" />

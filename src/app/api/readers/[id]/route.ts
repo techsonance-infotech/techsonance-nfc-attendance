@@ -149,7 +149,6 @@ export async function PUT(
 
     return NextResponse.json(updatedReader[0], { status: 200 });
   } catch (error) {
-    console.error('PUT /api/readers/[id] error:', error);
     return NextResponse.json(
       {
         error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error'),
@@ -157,5 +156,43 @@ export async function PUT(
       },
       { status: 500 }
     );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const user = await getCurrentUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    if (user.role !== 'admin') {
+      return NextResponse.json({
+        error: 'Insufficient permissions. Admin required',
+        code: 'FORBIDDEN'
+      }, { status: 403 });
+    }
+
+    const id = parseInt(params.id);
+    if (isNaN(id)) {
+      return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+    }
+
+    const deleted = await db.delete(readerDevices)
+      .where(eq(readerDevices.id, id))
+      .returning();
+
+    if (deleted.length === 0) {
+      return NextResponse.json({ error: 'Reader not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ message: 'Reader deleted successfully' }, { status: 200 });
+
+  } catch (error) {
+    console.error('DELETE error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

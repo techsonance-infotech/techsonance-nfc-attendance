@@ -29,17 +29,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Search, 
-  Plus, 
-  Pencil, 
-  Loader2, 
-  Wifi, 
-  WifiOff, 
+import {
+  Search,
+  Plus,
+  Pencil,
+  Loader2,
+  Wifi,
+  WifiOff,
   Activity,
   MapPin,
   Clock,
-  Info
+  Info,
+  Trash2
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -63,7 +64,7 @@ export default function ReadersPage() {
   const [readers, setReaders] = useState<Reader[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  
+
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingReader, setEditingReader] = useState<Reader | null>(null);
@@ -88,7 +89,9 @@ export default function ReadersPage() {
 
       if (!response.ok) throw new Error("Failed to fetch readers");
       const data = await response.json();
-      setReaders(data || []);
+      // Handle both array and object response formats
+      const readersList = Array.isArray(data) ? data : (data.readers || []);
+      setReaders(readersList);
     } catch (error) {
       toast.error("Failed to load readers");
       console.error(error);
@@ -179,6 +182,29 @@ export default function ReadersPage() {
     }
   };
 
+  // Handle delete
+  const handleDelete = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this reader?")) return;
+
+    try {
+      const token = localStorage.getItem("bearer_token");
+      const response = await fetch(`/api/readers/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) throw new Error("Failed to delete reader");
+
+      toast.success("Reader deleted successfully");
+      fetchReaders();
+    } catch (error) {
+      toast.error("Failed to delete reader");
+      console.error(error);
+    }
+  };
+
   // Filter readers
   const filteredReaders = readers.filter(
     (reader) =>
@@ -239,7 +265,7 @@ export default function ReadersPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -389,6 +415,13 @@ export default function ReadersPage() {
                           onClick={() => handleEdit(reader)}
                         >
                           <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(reader.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </TableCell>
                     </TableRow>

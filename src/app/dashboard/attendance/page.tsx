@@ -142,7 +142,7 @@ export default function AttendancePage() {
 
       if (!response.ok) throw new Error("Failed to fetch attendance");
       const data = await response.json();
-      
+
       // Handle both array response and object with records property
       const recordsArray = Array.isArray(data) ? data : (data.records || []);
       setRecords(recordsArray);
@@ -167,7 +167,7 @@ export default function AttendancePage() {
 
       if (!response.ok) throw new Error("Failed to fetch employees");
       const data = await response.json();
-      
+
       // Handle both array and object response
       const employeesArray = Array.isArray(data) ? data : (data.employees || []);
       setEmployees(employeesArray);
@@ -189,7 +189,7 @@ export default function AttendancePage() {
 
       if (!response.ok) throw new Error("Failed to fetch readers");
       const data = await response.json();
-      
+
       // Handle both array and object response
       const readersArray = Array.isArray(data) ? data : (data.readers || []);
       setReaders(readersArray);
@@ -250,8 +250,8 @@ export default function AttendancePage() {
       record.employee?.name || "N/A",
       record.employee?.email || "N/A",
       record.employee?.department || "N/A",
-      format(new Date(record.timeIn), "yyyy-MM-dd HH:mm:ss"),
-      record.timeOut ? format(new Date(record.timeOut), "yyyy-MM-dd HH:mm:ss") : "—",
+      record.timeIn.includes("T") ? format(new Date(record.timeIn), "yyyy-MM-dd HH:mm:ss") : `${record.date} ${record.timeIn}`,
+      record.timeOut ? (record.timeOut.includes("T") ? format(new Date(record.timeOut), "yyyy-MM-dd HH:mm:ss") : `${record.date} ${record.timeOut}`) : "—",
       record.duration?.toString() || "—",
       record.status,
       record.location || "—",
@@ -339,7 +339,7 @@ export default function AttendancePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -361,7 +361,7 @@ export default function AttendancePage() {
       </div>
 
       {/* NFC Attendance Toggle */}
-      <NFCAttendanceToggle 
+      <NFCAttendanceToggle
         readerId={readers[0]?.readerId || "MAIN_READER"}
         location={readers[0]?.location || "Main Entrance"}
         onSuccess={() => {
@@ -614,12 +614,24 @@ export default function AttendancePage() {
                       </TableCell>
                       <TableCell>{record.employee?.department || "N/A"}</TableCell>
                       <TableCell className="text-sm">
-                        {format(new Date(record.timeIn), "HH:mm:ss")}
+                        {(() => {
+                          // Helper to safely format time
+                          if (!record.timeIn) return "—";
+                          if (record.timeIn.includes("T")) {
+                            return format(new Date(record.timeIn), "HH:mm:ss");
+                          }
+                          // Assume it's already HH:mm:ss or similar 
+                          return record.timeIn;
+                        })()}
                       </TableCell>
                       <TableCell className="text-sm">
-                        {record.timeOut
-                          ? format(new Date(record.timeOut), "HH:mm:ss")
-                          : "—"}
+                        {(() => {
+                          if (!record.timeOut) return "—";
+                          if (record.timeOut.includes("T")) {
+                            return format(new Date(record.timeOut), "HH:mm:ss");
+                          }
+                          return record.timeOut;
+                        })()}
                       </TableCell>
                       <TableCell className="text-sm">
                         {record.duration ? `${record.duration} min` : "—"}

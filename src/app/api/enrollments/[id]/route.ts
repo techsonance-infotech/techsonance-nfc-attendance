@@ -21,9 +21,9 @@ export async function DELETE(
     // Role-based authorization check
     if (user.role !== 'admin' && user.role !== 'hr') {
       return NextResponse.json(
-        { 
+        {
           error: 'Insufficient permissions. Admin or HR role required',
-          code: 'INSUFFICIENT_PERMISSIONS' 
+          code: 'INSUFFICIENT_PERMISSIONS'
         },
         { status: 403 }
       );
@@ -71,11 +71,59 @@ export async function DELETE(
   } catch (error) {
     console.error('DELETE enrollment error:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error'),
-        code: 'INTERNAL_SERVER_ERROR' 
+        code: 'INTERNAL_SERVER_ERROR'
       },
       { status: 500 }
     );
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const user = await getCurrentUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    if (user.role !== 'admin' && user.role !== 'hr') {
+      return NextResponse.json({
+        error: 'Insufficient permissions',
+        code: 'FORBIDDEN'
+      }, { status: 403 });
+    }
+
+    const id = parseInt(params.id);
+    if (isNaN(id)) {
+      return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const { status } = body;
+
+    const validStatuses = ['active', 'inactive', 'lost', 'damaged'];
+    if (status && !validStatuses.includes(status)) {
+      return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+    }
+
+    const existing = await db.select().from(nfcTags).where(eq(nfcTags.id, id)).limit(1);
+    if (existing.length === 0) {
+      return NextResponse.json({ error: 'Enrollment not found' }, { status: 404 });
+    }
+
+    const updated = await db.update(nfcTags)
+      .set({ status })
+      .where(eq(nfcTags.id, id))
+      .returning();
+
+    return NextResponse.json(updated[0], { status: 200 });
+
+  } catch (error) {
+    console.error('PUT error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

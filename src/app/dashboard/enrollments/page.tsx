@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Search, Scan, Trash2, UserPlus, Loader2, CheckCircle2 } from "lucide-react";
+import { Search, Scan, Trash2, UserPlus, Loader2, CheckCircle2, Edit } from "lucide-react";
 import { toast } from "sonner";
 import CardScanner from "@/components/CardScanner";
 
@@ -62,7 +62,7 @@ export default function EnrollmentsPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  
+
   // Enrollment dialog state
   const [enrollDialogOpen, setEnrollDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string>("");
@@ -70,6 +70,12 @@ export default function EnrollmentsPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
+
+  // Edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingEnrollment, setEditingEnrollment] = useState<Enrollment | null>(null);
+  const [editStatus, setEditStatus] = useState("active");
+  const [updating, setUpdating] = useState(false);
 
   // Fetch enrollments
   const fetchEnrollments = async () => {
@@ -105,15 +111,17 @@ export default function EnrollmentsPage() {
 
       if (!response.ok) throw new Error("Failed to fetch employees");
       const data = await response.json();
-      
+
       // Filter out already enrolled employees
       const enrolledEmployeeIds = enrollments.map(e => e.employeeId);
-      const availableEmployees = (data.employees || []).filter(
-        (emp: Employee) => !enrolledEmployeeIds.includes(emp.id)
+      const employeesList = Array.isArray(data) ? data : (data.employees || []);
+
+      const availableEmployees = employeesList.filter(
+        (emp: Employee) => !enrolledEmployeeIds.includes(emp.id) && !emp.nfcCardId
       );
-      
+
       setEmployees(availableEmployees);
-      
+
       if (availableEmployees.length === 0) {
         toast.info("All employees are already enrolled");
       }
@@ -207,6 +215,42 @@ export default function EnrollmentsPage() {
     }
   };
 
+  // Handle update enrollment
+  const handleUpdate = async () => {
+    if (!editingEnrollment) return;
+
+    setUpdating(true);
+    try {
+      const token = localStorage.getItem("bearer_token");
+      const response = await fetch(`/api/enrollments/${editingEnrollment.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: editStatus }),
+      });
+
+      if (!response.ok) throw new Error("Failed to update enrollment");
+
+      toast.success("Enrollment updated successfully");
+      setEditDialogOpen(false);
+      setEditingEnrollment(null);
+      fetchEnrollments();
+    } catch (error) {
+      toast.error("Failed to update enrollment");
+      console.error(error);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const openEditDialog = (enrollment: Enrollment) => {
+    setEditingEnrollment(enrollment);
+    setEditStatus(enrollment.status);
+    setEditDialogOpen(true);
+  };
+
   // Filter enrollments
   const filteredEnrollments = enrollments.filter(
     (enrollment) =>
@@ -224,7 +268,7 @@ export default function EnrollmentsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -343,6 +387,13 @@ export default function EnrollmentsPage() {
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openEditDialog(enrollment)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))
@@ -367,8 +418,8 @@ export default function EnrollmentsPage() {
             {/* Employee Selection */}
             <div className="space-y-2">
               <Label htmlFor="employee">Select Employee</Label>
-              <Select 
-                value={selectedEmployee} 
+              <Select
+                value={selectedEmployee}
                 onValueChange={setSelectedEmployee}
                 disabled={loadingEmployees}
               >
@@ -442,8 +493,8 @@ export default function EnrollmentsPage() {
             >
               Cancel
             </Button>
-            <Button 
-              onClick={handleEnroll} 
+            <Button
+              onClick={handleEnroll}
               disabled={enrolling || !selectedEmployee || !scannedTagUid || isScanning}
             >
               {enrolling ? (
@@ -454,6 +505,40 @@ export default function EnrollmentsPage() {
               ) : (
                 "Enroll"
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Status Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Edit Enrollment Status</DialogTitle>
+            <DialogDescription>
+              Update the status of the NFC tag enrollment.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <Label>Status</Label>
+            <Select value={editStatus} onValueChange={setEditStatus}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="lost">Lost</SelectItem>
+                <SelectItem value="damaged">Damaged</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleUpdate} disabled={updating}>
+              {updating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Update Status"}
             </Button>
           </DialogFooter>
         </DialogContent>
