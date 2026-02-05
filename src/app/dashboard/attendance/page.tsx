@@ -43,6 +43,7 @@ import {
   Clock,
   LogOut,
   LogIn,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -89,6 +90,7 @@ export default function AttendancePage() {
   const [readers, setReaders] = useState<Reader[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastSync, setLastSync] = useState<Date>(new Date());
+  const [syncing, setSyncing] = useState(false);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
@@ -313,6 +315,31 @@ export default function AttendancePage() {
     }
   };
 
+  // Sync with Firebase
+  const handleSyncFirebase = async () => {
+    setSyncing(true);
+    try {
+      const response = await fetch("/api/firebase/poll");
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Sync failed");
+      }
+
+      toast.success(
+        `Synced from Firebase: ${data.created} new, ${data.updated} updated, ${data.skipped} skipped`
+      );
+
+      // Refresh attendance data after sync
+      await fetchAttendance();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to sync with Firebase");
+      console.error("Firebase sync error:", error);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   // Get unique departments
   const departments = Array.from(new Set(employees.map((e) => e.department).filter(Boolean))).sort();
 
@@ -349,6 +376,10 @@ export default function AttendancePage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleSyncFirebase} disabled={syncing}>
+            <RefreshCw className={cn("mr-2 h-4 w-4", syncing && "animate-spin")} />
+            {syncing ? "Syncing..." : "Sync Firebase"}
+          </Button>
           <Button variant="outline" onClick={exportToCSV}>
             <Download className="mr-2 h-4 w-4" />
             Export CSV

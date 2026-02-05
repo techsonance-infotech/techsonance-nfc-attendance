@@ -103,7 +103,8 @@ export default function EnrollmentsPage() {
     setLoadingEmployees(true);
     try {
       const token = localStorage.getItem("bearer_token");
-      const response = await fetch("/api/employees", {
+      // Request all employees with a high limit
+      const response = await fetch("/api/employees?limit=1000&status=active", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -112,12 +113,12 @@ export default function EnrollmentsPage() {
       if (!response.ok) throw new Error("Failed to fetch employees");
       const data = await response.json();
 
-      // Filter out already enrolled employees
+      // Filter out already enrolled employees (based on nfcTags table, not nfcCardId field)
       const enrolledEmployeeIds = enrollments.map(e => e.employeeId);
       const employeesList = Array.isArray(data) ? data : (data.employees || []);
 
       const availableEmployees = employeesList.filter(
-        (emp: Employee) => !enrolledEmployeeIds.includes(emp.id) && !emp.nfcCardId
+        (emp: Employee) => !enrolledEmployeeIds.includes(emp.id)
       );
 
       setEmployees(availableEmployees);
